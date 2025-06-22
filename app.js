@@ -8,6 +8,9 @@ const session = require("express-session");
 const bcrypt = require("bcrypt");
 const MongoStore = require("connect-mongo");
 const crypto = require("crypto"); // Add at top with other requires
+const { generateToken, setExpiration } = require('./utils/tokenGenerator');
+const { sendVerificationEmail } = require('./services/emailService');
+
 
 require("dotenv").config();
 const { requireAuth, redirectIfAuthenticated } = require("./middleware/auth");
@@ -67,6 +70,9 @@ const userSchema = new mongoose.Schema({
   resetRequestTimestamps: { type: [Date], default: [] },
   failedLoginAttempts: { type: Number, default: 0 }, // Track failed attempts
   blockExpires: Date, // When the block expires
+  isVerified: { type: Boolean, default: false },
+  emailVerificationToken: String,
+  emailVerificationExpires: Date,
 });
 
 const User = mongoose.model("User", userSchema);
@@ -122,14 +128,30 @@ app.post("/api/signup", async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create new user
+    // Generate verification token
+    const token = generateToken();
+    const expiration = setExpiration();
+
+    // Create new user (unverified)
     const newUser = new User({
       email,
       password: hashedPassword,
+      isVerified: false,
+      emailVerificationToken: token,
+      emailVerificationExpires: expiration
     });
 
     await newUser.save();
-    res.json({ success: true, message: "User created successfully" });
+     // Send verification email
+    try {
+      sendVerificationEmail(email, token);
+    } catch (emailErr) {
+      // Optionally, delete user if email fails
+      await User.deleteOne({ email });
+      return res.json({ success: false, message: "Could not send verification email. Please try again." });
+    }
+
+    res.json({ success: true, message: "Account created! Please check your email to verify your account." });
   } catch (error) {
     console.error("Signup error:", error);
     res.json({ success: false, message: "Server error" });
@@ -284,6 +306,179 @@ app.delete('/api/approvals/:id', requireAuth, async (req, res) => {
 });
 
 
+
+
+
+app.get('/verify-email', async (req, res) => {
+  const { token } = req.query;
+  try {
+    const user = await User.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).send(`
+        <html>
+        <head>
+          <title>Verification Failed</title>
+          <style>
+            body { font-family: Arial, sans-serif; background: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1500&q=80') no-repeat center center fixed;
+  background-size: cover;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .container { background: white; padding: 40px; border-radius: 8px; 
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 500px; }
+            h1 { color: #dc3545; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>❌ Verification Failed</h1>
+            <p>Invalid or expired verification token. Please request a new verification email.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    user.isVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    // Send styled success page with auto-redirect
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Email Verified</title>
+          <style>
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              background: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1500&q=80') no-repeat center center fixed;
+  background-size: cover;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              margin: 0;
+            }
+            .container {
+              background: white;
+              padding: 40px 60px;
+              border-radius: 15px;
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+              text-align: center;
+              max-width: 500px;
+              border: 1px solid #e0e7ff;
+            }
+            .success-icon {
+              font-size: 72px;
+              color: #10b981;
+              margin-bottom: 20px;
+            }
+            h1 {
+              color: #047857;
+              margin-bottom: 15px;
+              font-weight: 600;
+            }
+            p {
+              font-size: 18px;
+              color: #4b5563;
+              line-height: 1.6;
+              margin-bottom: 30px;
+            }
+            .btn {
+              display: inline-block;
+              padding: 14px 35px;
+              font-size: 17px;
+              font-weight: 500;
+              color: white;
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              border: none;
+              border-radius: 8px;
+              text-decoration: none;
+              cursor: pointer;
+              transition: all 0.3s ease;
+              box-shadow: 0 4px 6px rgba(5, 150, 105, 0.2);
+            }
+            .btn:hover {
+              transform: translateY(-3px);
+              box-shadow: 0 6px 12px rgba(5, 150, 105, 0.25);
+            }
+            .countdown {
+              color: #6b7280;
+              font-size: 16px;
+              margin-top: 20px;
+            }
+          </style>
+          <script>
+            let count = 5;
+            const countdownEl = document.getElementById('countdown');
+            
+            function updateCountdown() {
+              countdownEl.textContent = count;
+              if (count <= 0) {
+                window.location.href = '/login';
+              } else {
+                count--;
+                setTimeout(updateCountdown, 1000);
+              }
+            }
+            
+            window.onload = function() {
+              setTimeout(() => {
+                window.location.href = '/login';
+              }, 5000);
+              
+              // Start countdown
+              updateCountdown();
+            };
+          </script>
+      </head>
+      <body>
+          <div class="container">
+              <div class="success-icon">✓</div>
+              <h1>Email Verified Successfully!</h1>
+              <p>Your email address has been confirmed. You can now log in to your account and start using our services.</p>
+              <a href="/login" class="btn">Go to Login Page</a>
+              <div class="countdown">Redirecting in <span id="countdown">5</span> seconds...</div>
+          </div>
+      </body>
+      </html>
+    `);
+  } catch (error) {
+    res.status(500).send(`
+      <html>
+      <head>
+        <title>Error</title>
+        <style>
+          body { font-family: Arial, sans-serif; background: #f8d7da; 
+                 display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+          .container { background: white; padding: 40px; border-radius: 8px; 
+                      box-shadow: 0 4px 15px rgba(0,0,0,0.1); text-align: center; max-width: 500px; }
+          h1 { color: #dc3545; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>⚠️ Verification Error</h1>
+          <p>An unexpected error occurred: ${error.message}</p>
+          <p>Please contact support for assistance.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
+
+
+
+
+
 // Password Reset Page
 app.get("/reset-password/:token", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "reset-password.html"));
@@ -337,8 +532,8 @@ app.post("/api/login", async (req, res) => {
     if (!isMatch) {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
       if (user.failedLoginAttempts >= 5) {
-        user.blockExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // Block for 1 day
-        user.failedLoginAttempts = 0; // Reset attempts after block
+        user.blockExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        user.failedLoginAttempts = 0;
       }
       await user.save();
       return res.json({ success: false, message: "Invalid credentials" });
@@ -347,6 +542,15 @@ app.post("/api/login", async (req, res) => {
     // Reset failed attempts on successful login
     user.failedLoginAttempts = 0;
     user.blockExpires = null;
+
+    // Check email verification BEFORE saving and session creation
+    if (!user.isVerified) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Please verify your email before logging in.' 
+      });
+    }
+
     await user.save();
 
     req.session.user = {
@@ -360,6 +564,7 @@ app.post("/api/login", async (req, res) => {
     res.json({ success: false, message: "Server error" });
   }
 });
+
 
 app.post("/api/logout", (req, res) => {
   req.session.destroy((err) => {

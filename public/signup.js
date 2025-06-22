@@ -32,8 +32,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
 
       if (result.success) {
-        alert("Account created successfully! Please login.");
-        window.location.href = "/login";
+        // === PASTE THE NEW CODE HERE ===
+      alert("Account created! Please check your email to verify your account.");
+      window.location.href = "/login";
       } else {
         showError(result.message || "Signup failed");
       }
