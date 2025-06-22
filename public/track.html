@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Track Approvals</title>
+    <link rel="stylesheet" href="track.css">
+</head>
+
+<body>
+    <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; gap: 12px;">
+        <button onclick="goHome()" class="nav-btn"
+            style="background: #2980b9; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Home</button>
+        <button onclick="goTrack()" class="nav-btn"
+            style="background: #16a085; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Track</button>
+        <button onclick="logout()" class="nav-btn"
+            style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Logout</button>
+    </div>
+    <!-- Add this below your top navigation bar -->
+    <div class="action-bar"
+        style="position: absolute; top: 160px; right: 20px; z-index: 1000; display: flex; gap: 12px;">
+        <button id="deleteAllBtn" class="delete-all-btn nav-btn"
+            style="background: #c739ff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+            <i class="fas fa-trash-alt"></i> Delete All Displayed
+        </button>
+    </div>
+
+    <h2>Approval Records</h2>
+    <input type="text" id="search-input" placeholder="Search..."
+        style="margin-bottom:20px; padding:8px; width:250px; font-size:16px;">
+    <div class="table-container">
+        <table id="approval-table">
+            <thead>
+                <tr>
+                    <th>State</th>
+                    <th>Location</th>
+                    <th>Plant</th>
+                    <th>Site</th>
+                    <th>Facility</th>
+                    <th>Type of Approval</th>
+                    <th>Category</th>
+                    <th>Approval No.</th>
+                    <th>Granted On</th>
+                    <th>Valid Till</th>
+                    <th>Notification Email</th>
+                    <th>Status</th>
+                    <!-- <th>Email Sending Date</th> -->
+                    <th>Last Email Sent</th>
+                    <th>Delete</th>
+                    <th>Stop Sending Mail</th>
+                </tr>
+            </thead>
+            <tbody id="approvalTableBody">
+                <!-- Data will be injected here -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Snackbar for undo -->
+    <div id="undo-snackbar" style="
+    visibility: hidden;
+    min-width: 250px;
+    background-color: #323232;
+    color: #fff;
+    text-align: center;
+    border-radius: 8px;
+    padding: 16px;
+    position: fixed;
+    left: 50%;
+    bottom: 40px;
+    transform: translateX(-50%);
+    z-index: 10000;
+    font-size: 1rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+">
+        <span id="undo-message"></span>
+        <button id="undo-btn" style="
+      margin-left: 24px;
+      background: #16a085;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 1rem;
+  ">Undo</button>
+    </div>
+
+
+    <script src="track.js"></script>
+
+    <script>
+        function goHome() {
+            window.location.href = "/";
+        }
+        function goTrack() {
+            window.location.href = "/track";
+        }
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', { method: 'POST' });
+                const result = await response.json();
+                if (result.success) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                window.location.href = '/login';
+            }
+        }
+    </script>
+
+
+</body>
+
+</html>
