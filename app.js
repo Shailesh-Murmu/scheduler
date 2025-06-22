@@ -30,7 +30,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
-      mongoUrl: MONGODB,
+      mongoUrl: process.env.MONGODB,
     }),
     cookie: {
       secure: false, // Set to true in production with HTTPS
