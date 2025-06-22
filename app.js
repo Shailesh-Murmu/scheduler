@@ -794,7 +794,7 @@ function sendResetEmail(email, token) {
     subject: "Password Reset Request",
     html: `
             <p>You requested a password reset. Click the link below:</p>
-            <a href="http://localhost:3000/reset-password/${token}">
+            <a href="https://scheduler-98q6.onrender.com/reset-password/${token}">
                 Reset Password
             </a>
             <p>This link expires in 1 hour.</p>
