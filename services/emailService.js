@@ -22,7 +22,7 @@ transporter.verify((error) => {
 });
 
 module.exports.sendVerificationEmail = async (email, token) => {
-  const verificationLink = `https://scheduler-2de0.onrender.com/verify-email?token=${token}`;
+  const verificationLink = `https://www.youtube.com/watch?v=JbWCopFY9yA`;
   
   try {
     const info = await transporter.sendMail({
