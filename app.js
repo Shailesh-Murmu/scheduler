@@ -43,11 +43,7 @@ app.use(
 app.use(express.static(path.join(__dirname, "public")));
 
 // Database setup
-mongoose
-  .connect(process.env.MONGODB, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+mongoose.connect(process.env.MONGODB)
   .then(async () => {
     await Approval.updateMany(
       { notifiedDays: { $exists: false } },
