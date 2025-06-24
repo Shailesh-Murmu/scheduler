@@ -40,7 +40,6 @@ app.use(
   })
 );
 
-app.use(express.static(path.join(__dirname, "public")));
 
 // Database setup
 mongoose.connect(process.env.MONGODB)
