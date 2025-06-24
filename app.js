@@ -573,7 +573,7 @@ app.post("/api/logout", (req, res) => {
 
 // Protected Routes
 app.get("/", requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, "public/index.html"));
+  res.sendFile(path.join(__dirname, "public/indexs.html"));
 });
 
 app.get("/track", requireAuth, (req, res) => {
