@@ -833,7 +833,7 @@ cron.schedule(
           // Skip expired approvals
           if (daysRemaining < 0) continue;
 
-          const targetDays = [240, 210, 180, 150, 135, 120];
+          const targetDays = [240, 210, 180, 150, 135, 127,120];
           const shouldNotify =
             (targetDays.includes(daysRemaining) || daysRemaining < 120) &&
             !approval.notifiedDays.includes(daysRemaining); // Critical check
