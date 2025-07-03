@@ -917,12 +917,10 @@ async function sendReminderEmail(approval) {
           <p><strong>Approval Number:</strong> ${approval.approvalNo}</p>
           <p><strong>Approval Type:</strong> ${approval.typeOfApproval}</p>
           <p><strong>Approval Category:</strong> ${approval.category}</p>
-          <p><strong>Facility Location:</strong> ${approval.location}, ${
-          approval.state
-        }</p>
+          <p><strong>Facility Location:</strong> ${approval.location}, ${approval.state}</p>
           <p><strong>Granted On:</strong> ${grantedDate.toDateString()}</p>
           <p><strong>Valid Till:</strong> ${validTillDate.toDateString()}</p>
-          <p><strong>Days Remaining:</strong> ${daysRemaining}</p>
+          <p><strong>Days Remaining:</strong> ${daysRemaining-120}</p>
           <hr>
           <p>Please take necessary actions before expiry.</p>
         `,
