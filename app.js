@@ -874,13 +874,12 @@ async function sendReminderEmail(approval) {
         emailsToNotify = [approval.emails[0]];
     } else if (daysRemaining === 180) {
       if (approval.emails && approval.emails.length >= 2)
-        emailsToNotify = [approval.emails[0], approval.emails[1]];
+        emailsToNotify = [approval.emails[0]];
     } else if (daysRemaining === 150) {
       if (approval.emails && approval.emails.length >= 3)
         emailsToNotify = [
           approval.emails[0],
           approval.emails[1],
-          approval.emails[2],
         ];
     } else if (daysRemaining === 135) {
       if (approval.emails && approval.emails.length >= 4)
@@ -888,14 +887,13 @@ async function sendReminderEmail(approval) {
           approval.emails[0],
           approval.emails[1],
           approval.emails[2],
-          approval.emails[3],
         ];
     } else if (daysRemaining === 127) {
       if (approval.emails && approval.emails.length >= 4)
         emailsToNotify = approval.emails;
     } else if (
       daysRemaining > 0 &&
-      (daysRemaining === 120 || daysRemaining < 120)
+      (daysRemaining === 120)
     ) {
       if (approval.emails && approval.emails.length > 0)
         emailsToNotify = approval.emails;
