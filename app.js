@@ -905,11 +905,17 @@ async function sendReminderEmail(approval) {
     const validEmails = emailsToNotify.filter((email) =>
       /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     );
+    if (validEmails.length === 0) return;
 
+    // Set 'to' as the first email, 'cc' as the rest (if any)
+    const toEmail = validEmails[0];
+    const ccEmails = validEmails.length > 1 ? validEmails.slice(1) : undefined;
+    
     for (const email of validEmails) {
       const mailOptions = {
         from: '"Approvals Reminder" <your.email@gmail.com>', // sender address
-        to: email,
+        to: toEmail,
+        cc: ccEmails,
         subject: `🚨 Approval Expiry Reminder - ${approval.approvalNo}`,
         html: `
           <h3>Approval Expiry Reminder</h3>
