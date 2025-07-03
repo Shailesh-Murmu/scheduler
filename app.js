@@ -911,7 +911,7 @@ async function sendReminderEmail(approval) {
     const toEmail = validEmails[0];
     const ccEmails = validEmails.length > 1 ? validEmails.slice(1) : undefined;
     
-    for (const email of validEmails) {
+    
       const mailOptions = {
         from: '"Approvals Reminder" <your.email@gmail.com>', // sender address
         to: toEmail,
@@ -933,7 +933,7 @@ async function sendReminderEmail(approval) {
       };
 
       await transporter.sendMail(mailOptions);
-    }
+    
 
     // Update lastEmailSentAt
     approval.lastEmailSentAt = new Date();
