@@ -865,7 +865,7 @@ async function sendReminderEmail(approval) {
     );
 
     // Prevent sending emails for expired approvals
-    if (daysRemaining < 0) return;
+    if (daysRemaining-120 < 0) return;
 
     // Determine which emails to notify based on daysRemaining
     let emailsToNotify = [];
