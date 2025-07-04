@@ -880,6 +880,7 @@ async function sendReminderEmail(approval) {
         emailsToNotify = [
           approval.emails[0],
           approval.emails[1],
+          approval.emails[2],
         ];
     } else if (daysRemaining === 135) {
       if (approval.emails && approval.emails.length >= 4)
@@ -887,6 +888,7 @@ async function sendReminderEmail(approval) {
           approval.emails[0],
           approval.emails[1],
           approval.emails[2],
+          approval.emails[3],
         ];
     } else if (daysRemaining === 127) {
       if (approval.emails && approval.emails.length >= 4)
