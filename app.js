@@ -869,11 +869,8 @@ async function sendReminderEmail(approval) {
 
     // Determine which emails to notify based on daysRemaining
     let emailsToNotify = [];
-    if (daysRemaining === 240 || daysRemaining === 210) {
+    if (daysRemaining === 240 || daysRemaining === 210 || daysRemaining === 180) {
       if (approval.emails && approval.emails.length >= 1)
-        emailsToNotify = [approval.emails[0]];
-    } else if (daysRemaining === 180) {
-      if (approval.emails && approval.emails.length >= 2)
         emailsToNotify = [approval.emails[0]];
     } else if (daysRemaining === 150) {
       if (approval.emails && approval.emails.length >= 3)
