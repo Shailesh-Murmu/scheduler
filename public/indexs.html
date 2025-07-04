@@ -122,24 +122,24 @@
 
                 <div class="form-row">
                     <div class="input-group">
-                        <label for="typeOfApproval">Type of Approval:</label>
-                        <select id="typeOfApproval" name="typeOfApproval" required>
-                            <option value="">Select Type</option>
-                            <option value="Consent to Establish (CTE)">Consent to Establish (CTE)</option>
-                            <option value="Consent to Operate (CTO)">Consent to Operate (CTO)</option>
-                            <option value="Environmental Clearance (EC)">Environmental Clearance (EC)</option>
-                            <option value="Others">Others</option>
-                        </select>
+                        <label for="typeOfApproval">Approval Type:</label>
+                        <input list="typeOfApproval" id="typeOfApprovals" name="typeOfApproval" placeholder="Select or type...">
+                        <datalist id="typeOfApproval">
+                        <option value="Consent to Establish (CTE)">
+                        <option value="Consent to Operate (CTO)">
+                        <option value="Environmental Clearance (EC)">
+                        <option value="Others">
+                        </datalist>
                     </div>
                     <div class="input-group">
-                        <label for="category">Category:</label>
-                        <select id="category" name="category" required>
-                            <option value="">Select Category</option>
-                            <option value="Red">Red</option>
-                            <option value="Orange">Orange</option>
-                            <option value="Green">Green</option>
-                            <option value="White">White</option>
-                        </select>
+                        <label for="category">Approval Type:</label>
+                        <input list="typeOfCategory" id="typeOfCategorys" name="category" placeholder="Select or type...">
+                        <datalist id="typeOfCategory">
+                        <option value="Red">
+                        <option value="Orange">
+                        <option value="Green">
+                        <option value="White">
+                        </datalist>
                     </div>
                 </div>
 
