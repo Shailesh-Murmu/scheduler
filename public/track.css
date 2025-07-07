@@ -8,6 +8,21 @@ body {
     color: #e6e6e6;
 }
 
+.nav-btn {
+    background: #2980b9;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+.nav-btn:hover {
+    background: #1c5980;
+}
+
+
 h2 {
     text-align: center;
     margin: 0 0 40px 0;
