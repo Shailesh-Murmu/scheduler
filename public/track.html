@@ -15,14 +15,25 @@
             style="background: #16a085; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Track</button>
         <button onclick="logout()" class="nav-btn"
             style="background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Logout</button>
+
     </div>
     <!-- Add this below your top navigation bar -->
+    <!-- Add this near your table -->
+    <input type="text" id="new-col-name" placeholder="New column name"
+        style="padding:8px; border-radius:4px; border:1px solid #ccc; font-size:1rem;">
+    <button id="add-col-btn" class="nav-btn"
+        style="background: #2980b9; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+        Add New Column
+    </button>
+
+
     <div class="action-bar"
         style="position: absolute; top: 160px; right: 20px; z-index: 1000; display: flex; gap: 12px;">
         <button id="deleteAllBtn" class="delete-all-btn nav-btn"
             style="background: #c739ff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
             <i class="fas fa-trash-alt"></i> Delete All Displayed
         </button>
+
     </div>
 
     <h2>Approval Records</h2>
@@ -109,6 +120,37 @@
                 window.location.href = '/login';
             }
         }
+        document.getElementById('add-col-btn').addEventListener('click', async () => {
+            const colName = document.getElementById('new-col-name').value.trim();
+            if (!colName) return alert('Please enter a column name.');
+
+            // 1. Update the table header
+            const table = document.getElementById('approval-table');
+            const headerRow = table.querySelector('thead tr');
+            const th = document.createElement('th');
+            th.textContent = colName;
+            headerRow.appendChild(th);
+
+            // 2. Update all rows with empty editable cells
+            table.querySelectorAll('tbody tr').forEach(row => {
+                const td = document.createElement('td');
+                td.contentEditable = "true";
+                td.dataset.field = colName; // For later use
+                td.addEventListener('blur', handleCellEdit);
+                row.appendChild(td);
+            });
+
+            // 3. Notify backend to add new field to schema and all documents
+            await fetch('/api/add-column', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ field: colName })
+            });
+            document.getElementById('new-col-name').value = '';
+            await fetchDataAndUpdateTable();
+
+        });
+
     </script>
 
 
