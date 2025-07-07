@@ -208,6 +208,45 @@ app.delete("/api/data/:id", async (req, res) => {
   }
 });
 
+
+
+app.post('/api/delete-column', async (req, res) => {
+    const { field } = req.body;
+    if (!field) {
+        return res.status(400).json({ success: false, message: 'Field name required' });
+    }
+
+    try {
+        // Log connection and model info for debugging
+        console.log('Connection state:', mongoose.connection.readyState); // 1 = connected
+        console.log('Approval model:', Approval.modelName); // Should print 'Approval'
+
+        // Remove the field from all documents, regardless of schema
+        const result = await Approval.updateMany({}, { $unset: { [field]: "" } });
+        console.log(result);
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Update error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+/ Add this route
+app.post('/api/add-column', async (req, res) => {
+    const { field } = req.body;
+    if (!field) return res.status(400).json({ success: false, message: 'Field name required' });
+
+    // 1. Add field to schema dynamically
+    Approval.schema.add({ [field]: { type: String, default: '' } }); // You can change type as needed
+
+    // 2. Add field to all existing documents
+    await Approval.updateMany({ [field]: { $exists: false } }, { $set: { [field]: '' } });
+
+    res.json({ success: true });
+});
+
+
 // Add this with your other API routes
 // Update the delete endpoint
 // Add these at the top with other requires
