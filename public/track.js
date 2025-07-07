@@ -71,6 +71,31 @@ function filterTable(value, columnIndex) {
 
 let allData = []; // Store all fetched data globally
 
+
+
+function getColumnNames(data) {
+  const exclude = new Set([
+    '_id', 'createdAt', 'updatedAt', 'reminderSent', '__v', 'lastEmailSentAt',
+    'stopEmails', 'userId', 'status', 'notifiedDays'
+  ]);
+  // Get deleted columns from localStorage
+  const deletedCols = JSON.parse(localStorage.getItem('deletedColumns') || '[]');
+  deletedCols.forEach(col => exclude.add(col));
+
+  const columns = new Set();
+  data.forEach(item => {
+    Object.keys(item).forEach(key => {
+      if (!exclude.has(key)) {
+        columns.add(key);
+      }
+    });
+  });
+
+  return Array.from(columns);
+}
+
+
+
 document.addEventListener('DOMContentLoaded', () => {
     fetch('/api/data')
         .then(res => res.json())
@@ -80,9 +105,19 @@ document.addEventListener('DOMContentLoaded', () => {
             addHeaderFilterListeners();
         })
         .catch(err => {
-            document.querySelector('#approval-table tbody').innerHTML =
-                `<tr><td colspan="15">Error loading data</td></tr>`;
+            document.querySelector('#approval-table tbody').innerHTML = `<tr><td colspan="99">Error loading data</td></tr>`;
         });
+    // fetch('/api/data')
+    //     .then(res => res.json())
+    //     .then(data => {
+    //         allData = data;
+    //         populateTable(allData);
+    //         addHeaderFilterListeners();
+    //     })
+    //     .catch(err => {
+    //         document.querySelector('#approval-table tbody').innerHTML =
+    //             `<tr><td colspan="15">Error loading data</td></tr>`;
+    //     });
 
     document.getElementById('search-input').addEventListener('input', function() {
     const query = this.value.trim().toLowerCase();
@@ -118,140 +153,136 @@ document.addEventListener('DOMContentLoaded', () => {
 
 });
 
+
+function handleCellEdit(event) {
+    const td = event.target;
+    const newValue = td.textContent;
+    const field = td.dataset.field || td.getAttribute('data-field');
+    const row = td.closest('tr');
+    const id = row.dataset.id; // Make sure each <tr> has data-id attribute with document's _id
+
+    fetch('/api/update-cell', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ id, field, value: newValue })
+    });
+}
+
 function populateTable(data) {
-    // Custom sort: Valid first, then Not Valid, each by nearest validTill date
-    const today = new Date();
-    const sortedData = [...data].sort((a, b) => {
-        // Parse validTill dates
-        const aValidTill = a.validTill ? new Date(a.validTill) : null;
-        const bValidTill = b.validTill ? new Date(b.validTill) : null;
+  // Get dynamic columns
+  console.log('Fetched data:', allData);
+  console.log('Columns:', getColumnNames(allData));
+  const columns = getColumnNames(data);
 
-        // Determine validity
-        const aIsValid = aValidTill && today <= aValidTill;
-        const bIsValid = bValidTill && today <= bValidTill;
+  // Render table header
+  const thead = document.querySelector('#approval-table thead');
+  thead.innerHTML = '<tr>' +
+    columns.map(col => 
+      `<th>
+        ${col.toUpperCase()}
+        <button class="delete-col-btn" data-field="${col}" title="Delete column" style="margin-left:6px;color:#e53935;">&#128465;</button>
+      </th>`
+    ).join('') +
+    '<th>Status</th><th>Last Email Sent</th><th>Delete</th><th>Active</th></tr>';
 
-        // Sort by validity: Valid first
-        if (aIsValid !== bIsValid) {
-            return bIsValid - aIsValid; // true > false
-        }
+  // Attach delete column handlers
+  thead.querySelectorAll('.delete-col-btn').forEach(btn => {
+  btn.onclick = function(e) {
+    e.stopPropagation();
+    const field = this.getAttribute('data-field');
+    if (confirm(`Are you sure you want to delete the column "${field}"? This will remove the field from all records.`)) {
+      fetch('/api/delete-column', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field })
+      })
+      .then(res => res.json())
+      .then(result => {
+        if (result.success) {
+          // Track deleted columns in localStorage
+          let deletedCols = JSON.parse(localStorage.getItem('deletedColumns') || '[]');
+          if (!deletedCols.includes(field)) deletedCols.push(field);
+          localStorage.setItem('deletedColumns', JSON.stringify(deletedCols));
 
-        // Both are valid or both are not valid
-        // Sort by validTill date nearest to today (ascending)
-        if (aValidTill && bValidTill) {
-            // For valid: nearest future date; for not valid: most recently expired
-            const aDiff = Math.abs(aValidTill - today);
-            const bDiff = Math.abs(bValidTill - today);
-            return aDiff - bDiff;
-        } else if (aValidTill) {
-            return -1;
-        } else if (bValidTill) {
-            return 1;
+          fetchDataAndUpdateTable();
         } else {
-            return 0;
+          alert('Failed to delete column: ' + (result.message || 'Unknown error'));
         }
-    });
-    const tbody = document.querySelector('#approval-table tbody');
-    tbody.innerHTML = '';
-    if (!Array.isArray(data) || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="15">No records found.</td></tr>`;
-        return;
+      });
     }
-
-    sortedData.forEach(record => {
-        const tr = document.createElement('tr');
-        tr.setAttribute('data-id', record._id); // <-- Add this line
-        const currentDate = new Date();
-        const validTillDate = record.validTill ? new Date(record.validTill) : null;
-        // Status calculation
-        let status = 'Not Valid';
-        let statusClass = 'status-not-valid';
-        if (validTillDate && currentDate <= validTillDate) {
-            status = 'Valid';
-            statusClass = 'status-valid';
-        }
-
-        tr.innerHTML = `
-            <td>${record.state || ''}</td>
-            <td>${record.location || ''}</td>
-            <td>${record.plant || ''}</td>
-            <td>${record.site || ''}</td>
-            <td>${record.facility || ''}</td>
-            <td>${record.typeOfApproval || ''}</td>
-            <td class="${
-  record.category
-    ? 'category-' + record.category.toLowerCase()
-    : ''
-}">${record.category || ''}</td>
-
-            <td>${record.approvalNo || ''}</td>
-            <td>${record.grantedOn ? new Date(record.grantedOn).toLocaleDateString() : ''}</td>
-            <td>${validTillDate ? validTillDate.toLocaleDateString() : ''}</td>
-            <td>${record.emails ? record.emails.join(', ') : ''}</td>
-            <td class="${statusClass}">${status}</td>
-            <td>${
-  record.lastEmailSentAt
-    ? new Date(record.lastEmailSentAt).toLocaleDateString()
-    : 'Not sent yet'
-}</td>
-            <td><button class="delete-btn" data-id="${record._id}" style="color:#fff; background:#e53935; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Delete</button></td>
-            <td>
-        <button 
-            class="stop-email-btn" 
-            data-id="${record._id}" 
-            ${record.stopEmails ? 'disabled' : ''}
-            style="color:#fff; background:#ff9800; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">
-            ${record.stopEmails ? 'Stopped' : 'Active'}
-        </button>
-    </td>
-    
-        `;
-        tbody.appendChild(tr);
-    });
-
-
-    // Add this after the delete button event listeners
-document.querySelectorAll('.stop-email-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        const id = this.getAttribute('data-id');
-        if (confirm('Are you sure you want to stop all future emails for this record?')) {
-            fetch(`/api/stop-emails/${id}`, { method: 'POST' })
-                .then(res => {
-                    if (res.ok) {
-                        this.textContent = 'Stopped';
-                        this.disabled = true;
-                        // Optionally update local data
-                        const record = allData.find(item => item._id === id);
-                        if (record) record.stopEmails = true;
-                    } else {
-                        alert('Failed to stop emails.');
-                    }
-                });
-        }
-    });
+  };
 });
 
 
+  // Render table body
+  const tbody = document.querySelector('#approval-table tbody');
+  tbody.innerHTML = '';
+  if (!Array.isArray(data) || data.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="99">No records found.</td></tr>`;
+    return;
+  }
+
+  data.forEach(record => {
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-id', record._id);
+
+    // Render columns in the same order as headers
+    tr.innerHTML = columns.map(col => {
+      let value = record[col];
+      if (Array.isArray(value)) value = value.join(', ');
+      if (['grantedOn', 'validTill', 'lastEmailSentAt'].includes(col)) {
+        value = value ? new Date(value).toLocaleDateString() : '';
+      }
+      return `<td contenteditable="true" data-field="${col}">${value !== undefined ? value : ''}</td>`;
+    }).join('');
+
+    // Add special columns
+    const validTillDate = record.validTill ? new Date(record.validTill) : null;
+    let status = 'Not Valid';
+    let statusClass = 'status-not-valid';
+    if (validTillDate && new Date() <= validTillDate) {
+      status = 'Valid';
+      statusClass = 'status-valid';
+    }
+
+    tr.innerHTML += `
+      <td class="${statusClass}">${status}</td>
+      <td>${record.lastEmailSentAt ? new Date(record.lastEmailSentAt).toLocaleDateString() : 'Not sent yet'}</td>
+      <td><button class="delete-btn" data-id="${record._id}" style="color:#fff; background:#e53935; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Delete</button></td>
+      <td>
+        <button class="stop-email-btn" data-id="${record._id}" ${record.stopEmails ? 'disabled' : ''} style="color:#fff; background:#ff9800; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">
+          ${record.stopEmails ? 'Stopped' : 'Active'}
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Inline editing
+  tbody.querySelectorAll('td[contenteditable="true"]').forEach(td => {
+    td.onblur = handleCellEdit;
+  });
+
+  // Stop email buttons
+  tbody.querySelectorAll('.stop-email-btn').forEach(btn => {
+    btn.onclick = function() {
+      const id = this.getAttribute('data-id');
+      if (confirm('Are you sure you want to stop all future emails for this record?')) {
+        fetch(`/api/stop-emails/${id}`, { method: 'POST' }).then(res => {
+          if (res.ok) {
+            this.textContent = 'Stopped';
+            this.disabled = true;
+            const record = allData.find(item => item._id === id);
+            if (record) record.stopEmails = true;
+          } else {
+            alert('Failed to stop emails.');
+          }
+        });
+      }
+    };
+  });
 }
 
-
-// Add to your row creation function
-function createTableRow(approval) {
-  const row = document.createElement('tr');
-  row.dataset.id = approval._id;
-  
-  // ... your existing row creation code ...
-  
-  // Add delete button to each row
-  const deleteBtn = document.createElement('button');
-  deleteBtn.textContent = 'Delete';
-  deleteBtn.classList.add('delete-btn');
-  deleteBtn.onclick = () => deleteRecord(approval._id);
-  
-  // Add this button to your action cell
-  actionCell.appendChild(deleteBtn);
-  
-  return row;
-}
 
 
 
@@ -343,6 +374,7 @@ function filterTableByColumn(columnIndex, filterValue) {
     }
   });
 }
+
 
 
 
@@ -453,6 +485,7 @@ function finalizeDelete(id) {
     lastDeletedRecord = null;
   });
 }
+
 
 
 
