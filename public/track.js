@@ -78,9 +78,9 @@ function getColumnNames(data) {
     '_id', 'createdAt', 'updatedAt', 'reminderSent', '__v', 'lastEmailSentAt',
     'stopEmails', 'userId', 'status', 'notifiedDays'
   ]);
-  // Get deleted columns from localStorage
-  const deletedCols = JSON.parse(localStorage.getItem('deletedColumns') || '[]');
-  deletedCols.forEach(col => exclude.add(col));
+  // Exclude columns deleted by user
+  // const deletedCols = JSON.parse(localStorage.getItem('deletedColumns') || '[]');
+  // deletedCols.forEach(col => exclude.add(col));
 
   const columns = new Set();
   data.forEach(item => {
@@ -93,6 +93,8 @@ function getColumnNames(data) {
 
   return Array.from(columns);
 }
+
+
 
 
 
@@ -170,8 +172,8 @@ function handleCellEdit(event) {
 
 function populateTable(data) {
   // Get dynamic columns
-  console.log('Fetched data:', allData);
-  console.log('Columns:', getColumnNames(allData));
+  console.log('Fetched data:', data);
+  console.log('Columns:', getColumnNames(data));
   const columns = getColumnNames(data);
 
   // Render table header
@@ -186,7 +188,9 @@ function populateTable(data) {
     '<th>Status</th><th>Last Email Sent</th><th>Delete</th><th>Active</th></tr>';
 
   // Attach delete column handlers
-  thead.querySelectorAll('.delete-col-btn').forEach(btn => {
+  // In your populateTable or similar function:
+// In your populateTable or similar function:
+thead.querySelectorAll('.delete-col-btn').forEach(btn => {
   btn.onclick = function(e) {
     e.stopPropagation();
     const field = this.getAttribute('data-field');
@@ -199,11 +203,11 @@ function populateTable(data) {
       .then(res => res.json())
       .then(result => {
         if (result.success) {
-          // Track deleted columns in localStorage
+          // Optionally: Remove from localStorage if you use a deletedColumns list
           let deletedCols = JSON.parse(localStorage.getItem('deletedColumns') || '[]');
           if (!deletedCols.includes(field)) deletedCols.push(field);
           localStorage.setItem('deletedColumns', JSON.stringify(deletedCols));
-
+          // Fetch fresh data and update table
           fetchDataAndUpdateTable();
         } else {
           alert('Failed to delete column: ' + (result.message || 'Unknown error'));
@@ -212,6 +216,8 @@ function populateTable(data) {
     }
   };
 });
+
+
 
 
   // Render table body
