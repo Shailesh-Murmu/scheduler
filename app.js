@@ -329,23 +329,22 @@ app.delete('/api/approvals/:id', requireAuth, async (req, res) => {
   }
 });
 
-
 app.post('/api/delete-column', async (req, res) => {
     const { field } = req.body;
     if (!field) {
         return res.status(400).json({ success: false, message: 'Field name required' });
     }
-
     try {
-        // Log connection and model info for debugging
-        console.log('Connection state:', mongoose.connection.readyState); // 1 = connected
-        console.log('Approval model:', Approval.modelName); // Should print 'Approval'
-
-        // Remove the field from all documents, regardless of schema
+        // Remove the field from all documents
         const result = await Approval.updateMany({}, { $unset: { [field]: "" } });
-        console.log(result);
 
-        res.json({ success: true });
+        // Optionally: Remove from in-memory schema (for current session only)
+        if (Approval.schema.path(field)) {
+            delete Approval.schema.paths[field];
+            delete Approval.schema.tree[field];
+        }
+
+        res.json({ success: true, modifiedCount: result.modifiedCount });
     } catch (err) {
         console.error('Update error:', err);
         res.status(500).json({ success: false, message: err.message });
