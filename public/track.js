@@ -71,6 +71,16 @@ function filterTable(value, columnIndex) {
 
 let allData = []; // Store all fetched data globally
 
+function openGoogleForm(approvalId, emails) {
+  if (confirm("Are you sure you want to stop all future emails for this record?")) {
+    // Replace with your actual Google Form URL
+    let formBaseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdtmQmzRqdGq9YmJYObfHWuyEhIcdxL7dq6TqlC3Zf4lsDTSg/viewform";
+    var approvalIdEntry = "entry.201971047"; // Replace with your real entry code
+    var prefilledUrl = `${formBaseUrl}?usp=pp_url&${approvalIdEntry}=${encodeURIComponent(approvalId)}`;
+    window.open(prefilledUrl, '_blank');
+  }
+}
+
 
 
 function getColumnNames(data) {
@@ -256,13 +266,23 @@ thead.querySelectorAll('.delete-col-btn').forEach(btn => {
       <td>${record.lastEmailSentAt ? new Date(record.lastEmailSentAt).toLocaleDateString() : 'Not sent yet'}</td>
       <td><button class="delete-btn" data-id="${record._id}" style="color:#fff; background:#e53935; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Delete</button></td>
       <td>
-        <button class="stop-email-btn" data-id="${record._id}" ${record.stopEmails ? 'disabled' : ''} style="color:#fff; background:#ff9800; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">
-          ${record.stopEmails ? 'Stopped' : 'Active'}
-        </button>
-      </td>
+    <button
+      class="stop-email-btn"
+      data-id="${record._id}"
+      style="color:#fff; background:#ff9800; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;"
+      ${record.stopEmails ? 'disabled' : ''}
+      onclick="openGoogleForm('${record._id}', '${(record.emails || []).join(',')}')"
+    >
+      ${record.stopEmails ? 'Stopped' : 'Active'}
+    </button>
+  </td>
     `;
     tbody.appendChild(tr);
   });
+
+  // Open Google Form in a new tab after confirmation
+
+  
 
   // Inline editing
   tbody.querySelectorAll('td[contenteditable="true"]').forEach(td => {
@@ -270,23 +290,23 @@ thead.querySelectorAll('.delete-col-btn').forEach(btn => {
   });
 
   // Stop email buttons
-  tbody.querySelectorAll('.stop-email-btn').forEach(btn => {
-    btn.onclick = function() {
-      const id = this.getAttribute('data-id');
-      if (confirm('Are you sure you want to stop all future emails for this record?')) {
-        fetch(`/api/stop-emails/${id}`, { method: 'POST' }).then(res => {
-          if (res.ok) {
-            this.textContent = 'Stopped';
-            this.disabled = true;
-            const record = allData.find(item => item._id === id);
-            if (record) record.stopEmails = true;
-          } else {
-            alert('Failed to stop emails.');
-          }
-        });
-      }
-    };
-  });
+  // tbody.querySelectorAll('.stop-email-btn').forEach(btn => {
+  //   btn.onclick = function() {
+  //     const id = this.getAttribute('data-id');
+  //     if (confirm('Are you sure you want to stop all future emails for this record?')) {
+  //       fetch(`/api/stop-emails/${id}`, { method: 'POST' }).then(res => {
+  //         if (res.ok) {
+  //           this.textContent = 'Stopped';
+  //           this.disabled = true;
+  //           const record = allData.find(item => item._id === id);
+  //           if (record) record.stopEmails = true;
+  //         } else {
+  //           alert('Failed to stop emails.');
+  //         }
+  //       });
+  //     }
+  //   };
+  // });
 }
 
 
