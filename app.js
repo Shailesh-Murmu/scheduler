@@ -240,6 +240,24 @@ app.delete("/api/data/:id", async (req, res) => {
 // Update the delete endpoint
 // Add these at the top with other requires
 
+// Confirmation endpoint
+app.get('/api/approvals/:id/confirm-stop', async (req, res) => {
+  try {
+    const approval = await Approval.findByIdAndUpdate(
+      req.params.id,
+      { stopEmails: true },
+      { new: true }
+    );
+    if (approval) {
+      res.send("Notifications have been stopped for this record.");
+    } else {
+      res.status(404).send("Record not found.");
+    }
+  } catch (err) {
+    res.status(500).send("Error processing request.");
+  }
+});
+
 app.delete("/api/approvals/delete-many", requireAuth, async (req, res) => {
   try {
     const { ids } = req.body;
@@ -998,6 +1016,44 @@ async function sendReminderEmail(approval) {
     throw err;
   }
 }
+
+// Add near other API endpoints, after express middlewares and before your app.listen
+
+// This endpoint listens for JSON payloads sent by Google Apps Script
+app.post('/api/form-submission', async (req, res) => {
+  try {
+    // Get data from Google Apps Script POST
+    const { approvalId, email, fileUrl } = req.body;
+
+    if (!approvalId || !email || !fileUrl) {
+      return res.status(400).json({ success: false, message: "Missing required fields." });
+    }
+
+    // Find the relevant record in your Approvals collection using Approval ID
+    const approval = await Approval.findOne({ _id: approvalId });
+
+    if (!approval) {
+      console.log("Hi")
+      return res.status(404).json({ success: false, message: "Approval not found." });
+    }
+
+    // OPTIONAL: Save the uploaded file link or submission info to approval (add appropriate field if needed)
+    // approval.uploadedFormDocs = approval.uploadedFormDocs || [];
+    // approval.uploadedFormDocs.push({ email, fileUrl, submittedAt: new Date() });
+    // await approval.save();
+
+    // OPTIONAL: You might want to send a notification email to the approver at this point.
+    // e.g., sendNotificationEmail(approval, fileUrl, email);
+
+    // For now, just send acknowledgement
+    console.log("yes")
+    res.json({ success: true, message: `Received form submission for approval ID ${approvalId}` });
+  } catch (error) {
+    console.error('Error handling Google Form submission:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
