@@ -1031,23 +1031,67 @@ app.post('/api/form-submission', async (req, res) => {
 
     // Find the relevant record in your Approvals collection using Approval ID
     const approval = await Approval.findOne({ _id: approvalId });
-
     if (!approval) {
-      console.log("Hi")
       return res.status(404).json({ success: false, message: "Approval not found." });
     }
 
-    // OPTIONAL: Save the uploaded file link or submission info to approval (add appropriate field if needed)
-    // approval.uploadedFormDocs = approval.uploadedFormDocs || [];
-    // approval.uploadedFormDocs.push({ email, fileUrl, submittedAt: new Date() });
-    // await approval.save();
+    // 1. SAVE UPLOADED FILE LINK IN DB
+    approval.uploadedFormDocs = approval.uploadedFormDocs || [];
+    approval.uploadedFormDocs.push({ email, fileUrl, submittedAt: new Date() });
+    await approval.save();
 
-    // OPTIONAL: You might want to send a notification email to the approver at this point.
-    // e.g., sendNotificationEmail(approval, fileUrl, email);
+    // 2. SEND NOTIFICATION EMAIL TO THE 4th (or LAST) APPROVER
+    // Determine the approver's email
+    let recipient = '';
+    if (approval.emails.length >= 4) {
+      recipient = approval.emails[3];
+    } else if (approval.emails.length > 0) {
+      recipient = approval.emails[approval.emails.length - 1];
+    } else {
+      // No email to send to
+      return res.status(200).json({ success: true, message: "No approver email found to notify, saved file URL." });
+    }
 
-    // For now, just send acknowledgement
-    console.log("yes")
-    res.json({ success: true, message: `Received form submission for approval ID ${approvalId}` });
+    // Compose record details (customize for your actual fields)
+    const details = `
+      <strong>Approval Details:</strong><br>
+      State: ${approval.state}<br>
+      Location: ${approval.location}<br>
+      Plant: ${approval.plant}<br>
+      Site: ${approval.site}<br>
+      Facility: ${approval.facility}<br>
+      Type: ${approval.typeOfApproval}<br>
+      Category: ${approval.category}<br>
+      Approval No.: ${approval.approvalNo}<br>
+      Granted On: ${approval.grantedOn ? new Date(approval.grantedOn).toLocaleDateString() : ''}<br>
+      Valid Till: ${approval.validTill ? new Date(approval.validTill).toLocaleDateString() : ''}<br>
+    `;
+
+    // Build the confirmation URL
+    const confirmLink = `https://scheduler-98q6.onrender.com/api/approvals/${approval._id}/confirm-stop`;
+
+    // Compose email
+    const mailOptions = {
+      from: '"Approvals System" <shaileshmurmucool@email.com>', // Update with your address
+      to: recipient,
+      subject: 'Request for Stop Notification Emails: Approval ' + approval.approvalNo,
+      html: `
+        <p>A request has been made to stop future email notifications for the following record:</p>
+        ${details}
+        <p><strong>Uploaded Document from Requestor:</strong><br>
+        <a href="${fileUrl}" target="_blank">${fileUrl}</a><br><br>
+        <em>Requested by:</em> ${email}</p>
+        <p>To approve and stop notifications, <a href="${confirmLink}" target="_blank">click here</a>.</p>
+      `
+    };
+
+    // Send the email (transporter is your existing nodemailer transporter)
+    await transporter.sendMail(mailOptions);
+    console.log(`Notified ${recipient} with stop request for approval ID ${approvalId}`);
+
+
+    // 3. Respond as success
+    res.json({ success: true, message: `Received and notified approver for approval ID ${approvalId}` });
   } catch (error) {
     console.error('Error handling Google Form submission:', error);
     res.status(500).json({ success: false, message: 'Server error' });
