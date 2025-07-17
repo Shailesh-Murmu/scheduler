@@ -249,14 +249,265 @@ app.get('/api/approvals/:id/confirm-stop', async (req, res) => {
       { new: true }
     );
     if (approval) {
-      res.send("Notifications have been stopped for this record.");
+      res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+          <title>Notifications Stopped</title>
+          <style>
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              background: url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1500&q=80') no-repeat center center fixed;
+              background-size: cover;
+              min-height: 100vh;
+              margin: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .container {
+              background: white;
+              padding: 40px 60px;
+              border-radius: 15px;
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+              text-align: center;
+              max-width: 500px;
+              border: 1px solid #e0e7ff;
+            }
+            .success-icon {
+              font-size: 72px;
+              color: #10b981;
+              margin-bottom: 20px;
+            }
+            h1 {
+              color: #047857;
+              margin-bottom: 15px;
+              font-weight: 600;
+            }
+            p {
+              font-size: 18px;
+              color: #4b5563;
+              line-height: 1.6;
+              margin-bottom: 30px;
+            }
+            .btn {
+              display: inline-block;
+              padding: 14px 35px;
+              font-size: 17px;
+              font-weight: 500;
+              color: white;
+              background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+              border: none;
+              border-radius: 8px;
+              text-decoration: none;
+              cursor: pointer;
+              transition: all 0.3s ease;
+              box-shadow: 0 4px 6px rgba(5, 150, 105, 0.2);
+            }
+            .btn:hover {
+              transform: translateY(-3px);
+              box-shadow: 0 6px 12px rgba(5, 150, 105, 0.25);
+            }
+            .countdown {
+              color: #6b7280;
+              font-size: 16px;
+              margin-top: 20px;
+            }
+          </style>
+          <script>
+            let count = 5;
+            function updateCountdown() {
+              document.getElementById('countdown').textContent = count;
+              if (count <= 0) {
+                window.location.href = '/';
+              } else {
+                count--;
+                setTimeout(updateCountdown, 1000);
+              }
+            }
+            window.onload = function() {
+              setTimeout(() => {
+                window.location.href = '/';
+              }, 5000);
+              updateCountdown();
+            }
+          </script>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success-icon">✅</div>
+            <h1>Notifications Stopped</h1>
+            <p>
+              All future email notifications for this approval record have been successfully stopped.<br><br>
+              <strong>Approval No.:</strong> ${approval.approvalNo || ''}
+            </p>
+            <a href="/" class="btn">Go to Home Page</a>
+            <div class="countdown">Redirecting in <span id="countdown">5</span> seconds...</div>
+          </div>
+        </body>
+        </html>
+      `);
     } else {
-      res.status(404).send("Record not found.");
+      // Not found
+      res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+          <title>Record Not Found</title>
+          <style>
+            body {
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+              background: #f8d7da;
+              min-height: 100vh;
+              margin: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .container {
+              background: white;
+              padding: 40px 60px;
+              border-radius: 15px;
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+              text-align: center;
+              max-width: 500px;
+              border: 1px solid #e0e7ff;
+            }
+            .error-icon {
+              font-size: 65px;
+              color: #dc3545;
+              margin-bottom: 20px;
+            }
+            h1 {
+              color: #b91c1c;
+              margin-bottom: 15px;
+              font-weight: 600;
+            }
+            p {
+              font-size: 16px;
+              color: #4b5563;
+              line-height: 1.4;
+              margin-bottom: 20px;
+            }
+            .btn {
+              display: inline-block;
+              padding: 14px 35px;
+              font-size: 17px;
+              font-weight: 500;
+              color: white;
+              background: linear-gradient(135deg, #dc3545 0%, #ffa5a5 100%);
+              border: none;
+              border-radius: 8px;
+              text-decoration: none;
+              cursor: pointer;
+              transition: all 0.3s ease;
+              box-shadow: 0 4px 6px rgba(220,53,69,0.1);
+            }
+            .btn:hover {
+              background: linear-gradient(135deg, #a71d2a 0%, #ffb3b3 100%);
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="error-icon">⚠️</div>
+            <h1>Record Not Found</h1>
+            <p>The approval record you are trying to update does not exist or was already removed.</p>
+            <a href="/" class="btn">Return Home</a>
+          </div>
+        </body>
+        </html>
+      `);
     }
   } catch (err) {
-    res.status(500).send("Error processing request.");
+    // Internal server error
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Error</title>
+        <style>
+          body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8d7da;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .container {
+            background: white;
+            padding: 40px 60px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            max-width: 500px;
+            border: 1px solid #e0e7ff;
+          }
+          .error-icon {
+            font-size: 65px;
+            color: #dc3545;
+            margin-bottom: 20px;
+          }
+          h1 {
+            color: #b91c1c;
+            margin-bottom: 15px;
+            font-weight: 600;
+          }
+          p {
+            font-size: 16px;
+            color: #4b5563;
+            line-height: 1.4;
+            margin-bottom: 20px;
+          }
+          .btn {
+            display: inline-block;
+            padding: 14px 35px;
+            font-size: 17px;
+            font-weight: 500;
+            color: white;
+            background: linear-gradient(135deg, #dc3545 0%, #ffa5a5 100%);
+            border: none;
+            border-radius: 8px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(220,53,69,0.1);
+          }
+          .btn:hover {
+            background: linear-gradient(135deg, #a71d2a 0%, #ffb3b3 100%);
+          }
+          .details {
+            background: #fae2e2;
+            color: #a94442;
+            padding: 10px;
+            margin-top: 8px;
+            border-radius: 6px;
+            font-size: 13px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="error-icon">❌</div>
+          <h1>Error Processing Request</h1>
+          <p>Sorry, an unexpected error occurred while processing your request.</p>
+          <div class="details">${err.message}</div>
+          <a href="/" class="btn">Return Home</a>
+        </div>
+      </body>
+      </html>
+    `);
   }
 });
+
 
 app.delete("/api/approvals/delete-many", requireAuth, async (req, res) => {
   try {
