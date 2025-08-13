@@ -11,9 +11,10 @@
         .main-container {
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start; /* Align items to the top */
             min-height: 100vh;
             gap: 40px;
+            padding-top: 80px; /* Add padding to avoid overlap with nav */
         }
 
         .or-separator {
@@ -23,6 +24,7 @@
             min-width: 90px;
             max-width: 120px;
             height: auto;
+            align-self: center; /* Center vertically relative to flex container */
         }
 
         .or-separator span {
@@ -54,6 +56,21 @@
 
         .form-row .input-group {
             flex: 1;
+        }
+        
+        .email-fields-container {
+            border: 1px solid #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .email-fields-container h3 {
+            margin-bottom: 1rem;
+            color: #2c3e50;
+            font-size: 1.2rem;
+            text-align: center;
         }
 
         @media (max-width: 900px) {
@@ -132,7 +149,7 @@
                         </datalist>
                     </div>
                     <div class="input-group">
-                        <label for="category">Approval Type:</label>
+                        <label for="category">Category:</label>
                         <input list="typeOfCategory" id="typeOfCategorys" name="category" placeholder="Select or type...">
                         <datalist id="typeOfCategory">
                         <option value="Red">
@@ -159,10 +176,29 @@
                     </div>
                 </div>
 
-                <div class="input-group">
-                    <label for="email">Email for Notifications:</label>
-                    <input type="email" id="emails" name="emails" multiple
-                        placeholder="user1@example.com, user2@example.com" required>
+                <!-- New Email Fields -->
+                <div class="email-fields-container">
+                    <h3>Notification Emails</h3>
+                    <div class="input-group">
+                        <label for="performerEmail">Performer Email:</label>
+                        <input type="email" id="performerEmail" name="performerEmail" placeholder="performer@example.com" required>
+                    </div>
+                     <div class="input-group">
+                        <label for="unitHeadEmail">Unit Head Environment Email:</label>
+                        <input type="email" id="unitHeadEmail" name="unitHeadEmail" placeholder="unit.head@example.com" required>
+                    </div>
+                     <div class="input-group">
+                        <label for="unitChiefEmail">Unit Chief Environment Email:</label>
+                        <input type="email" id="unitChiefEmail" name="unitChiefEmail" placeholder="unit.chief@example.com" required>
+                    </div>
+                     <div class="input-group">
+                        <label for="headEnvironmentEmail">Head Environment Clearance & Compliance Email:</label>
+                        <input type="email" id="headEnvironmentEmail" name="headEnvironmentEmail" placeholder="head.env@example.com" required>
+                    </div>
+                     <div class="input-group">
+                        <label for="complianceEmail">Cheif Environment Email:</label>
+                        <input type="email" id="complianceEmail" name="complianceEmail" placeholder="compliance@example.com" required>
+                    </div>
                 </div>
 
                 <button class="sub" type="submit">Register Approval</button>
@@ -182,11 +218,32 @@
 
         <div class="excel-upload">
             <h2>Upload Excel Sheet</h2>
-            <div class="input-group">
-                <label for="notificationEmail">Notification Email:</label>
-                <input type="email" id="notificationEmail" name="emails" multiple
-                    placeholder="user1@example.com, user2@example.com" required>
+            
+            <!-- New Email Fields for Excel Upload -->
+            <div class="email-fields-container">
+                <h3>Notification Emails for Excel Data</h3>
+                 <div class="input-group">
+                    <label for="excelPerformerEmail">Performer Email:</label>
+                    <input type="email" id="excelPerformerEmail" name="excelPerformerEmail" placeholder="performer@example.com" required>
+                </div>
+                 <div class="input-group">
+                    <label for="excelUnitHeadEmail">Unit Head Environment Email:</label>
+                    <input type="email" id="excelUnitHeadEmail" name="excelUnitHeadEmail" placeholder="unit.head@example.com" required>
+                </div>
+                 <div class="input-group">
+                    <label for="excelUnitChiefEmail">Unit Chief Environment Email:</label>
+                    <input type="email" id="excelUnitChiefEmail" name="excelUnitChiefEmail" placeholder="unit.chief@example.com" required>
+                </div>
+                 <div class="input-group">
+                    <label for="excelHeadEnvironmentEmail">Head Environment Clearance & Compliance Email:</label>
+                    <input type="email" id="excelHeadEnvironmentEmail" name="excelHeadEnvironmentEmail" placeholder="head.env@example.com" required>
+                </div>
+                 <div class="input-group">
+                    <label for="excelComplianceEmail">Chief Environment Email:</label>
+                    <input type="email" id="excelComplianceEmail" name="excelComplianceEmail" placeholder="compliance@example.com" required>
+                </div>
             </div>
+
             <input type="file" id="excelFile" accept=".xlsx, .xls">
             <button id="uploadExcelBtn" type="button">Upload</button>
             <div id="dueDateResult"></div>
