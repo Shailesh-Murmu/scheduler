@@ -7,7 +7,7 @@ const cors = require("cors");
 const session = require("express-session");
 const bcrypt = require("bcrypt");
 const MongoStore = require("connect-mongo");
-const crypto = require("crypto"); // Add at top with other requires
+const crypto = require("crypto");
 const { generateToken, setExpiration } = require('./utils/tokenGenerator');
 const { sendVerificationEmail } = require('./services/emailService');
 
@@ -27,7 +27,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // Session configuration
 app.use(
   session({
-    secret: "your-secret-key-change-this", // Change this to a random string
+    secret: "your-secret-key-change-this",
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
@@ -56,16 +56,14 @@ mongoose.connect(process.env.MONGODB)
   });
 
 // User Schema
-// In your existing User schema
-// In your existing User schema (app.js or models/User.js)
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   resetPasswordToken: String,
   resetPasswordExpires: Date,
   resetRequestTimestamps: { type: [Date], default: [] },
-  failedLoginAttempts: { type: Number, default: 0 }, // Track failed attempts
-  blockExpires: Date, // When the block expires
+  failedLoginAttempts: { type: Number, default: 0 },
+  blockExpires: Date,
   isVerified: { type: Boolean, default: false },
   emailVerificationToken: String,
   emailVerificationExpires: Date,
@@ -73,7 +71,7 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
-// Approval Schema (your existing schema)
+// Approval Schema
 const approvalSchema = new mongoose.Schema({
   state: String,
   location: String,
@@ -93,10 +91,18 @@ const approvalSchema = new mongoose.Schema({
   lastEmailSentAt: { type: Date, default: null },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   status: { type: String, default: "Valid" },
+  // ** THIS IS THE FIX: Added the field to store document links **
+  uploadedFormDocs: {
+    type: [{
+        email: String,
+        fileUrl: String,
+        submittedAt: Date
+    }],
+    default: []
+  }
 });
 
 const Approval = mongoose.model("Approval", approvalSchema);
-
 
 
 // Add this route
@@ -104,10 +110,8 @@ app.post('/api/add-column', async (req, res) => {
     const { field } = req.body;
     if (!field) return res.status(400).json({ success: false, message: 'Field name required' });
 
-    // 1. Add field to schema dynamically
-    Approval.schema.add({ [field]: { type: String, default: '' } }); // You can change type as needed
+    Approval.schema.add({ [field]: { type: String, default: '' } });
 
-    // 2. Add field to all existing documents
     await Approval.updateMany({ [field]: { $exists: false } }, { $set: { [field]: '' } });
 
     res.json({ success: true });
@@ -119,7 +123,6 @@ app.get("/login", redirectIfAuthenticated, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
-// Forgot Password Page
 app.get("/forgot-password", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "forgot-password.html"));
 });
@@ -133,7 +136,6 @@ app.post('/api/update-cell', async (req, res) => {
     const { id, field, value } = req.body;
     if (!id || !field) return res.status(400).json({ success: false });
 
-    // Use strict: false to allow updating dynamic fields
     await Approval.findByIdAndUpdate(id, { $set: { [field]: value } }, { strict: false });
     res.json({ success: true });
 });
@@ -143,20 +145,16 @@ app.post("/api/signup", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.json({ success: false, message: "User already exists" });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Generate verification token
     const token = generateToken();
     const expiration = setExpiration();
 
-    // Create new user (unverified)
     const newUser = new User({
       email,
       password: hashedPassword,
@@ -166,11 +164,9 @@ app.post("/api/signup", async (req, res) => {
     });
 
     await newUser.save();
-     // Send verification email
     try {
       sendVerificationEmail(email, token);
     } catch (emailErr) {
-      // Optionally, delete user if email fails
       await User.deleteOne({ email });
       return res.json({ success: false, message: "Could not send verification email. Please try again." });
     }
@@ -182,9 +178,6 @@ app.post("/api/signup", async (req, res) => {
   }
 });
 
-// Password Reset Request
-// In app.js
-
 app.post("/api/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
@@ -194,7 +187,6 @@ app.post("/api/forgot-password", async (req, res) => {
       return res.json({ success: false, message: "User not found" });
     }
 
-    // Clean up timestamps older than 24 hours
     const now = new Date();
     user.resetRequestTimestamps = user.resetRequestTimestamps.filter(
       (ts) => now - ts < 24 * 60 * 60 * 1000
@@ -208,16 +200,13 @@ app.post("/api/forgot-password", async (req, res) => {
       });
     }
 
-    // Add current timestamp
     user.resetRequestTimestamps.push(now);
 
-    // Generate reset token
     const resetToken = crypto.randomBytes(20).toString("hex");
     user.resetPasswordToken = resetToken;
     user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
     await user.save();
 
-    // Send email
     sendResetEmail(user.email, resetToken);
 
     res.json({ success: true, message: "Reset link sent to email" });
@@ -236,11 +225,6 @@ app.delete("/api/data/:id", async (req, res) => {
   }
 });
 
-// Add this with your other API routes
-// Update the delete endpoint
-// Add these at the top with other requires
-
-// Confirmation endpoint
 app.get('/api/approvals/:id/confirm-stop', async (req, res) => {
   try {
     const approval = await Approval.findByIdAndUpdate(
@@ -350,7 +334,6 @@ app.get('/api/approvals/:id/confirm-stop', async (req, res) => {
         </html>
       `);
     } else {
-      // Not found
       res.status(404).send(`
         <!DOCTYPE html>
         <html lang="en">
@@ -424,7 +407,6 @@ app.get('/api/approvals/:id/confirm-stop', async (req, res) => {
       `);
     }
   } catch (err) {
-    // Internal server error
     res.status(500).send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -513,7 +495,6 @@ app.delete("/api/approvals/delete-many", requireAuth, async (req, res) => {
   try {
     const { ids } = req.body;
 
-    // Validate input
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({
         success: false,
@@ -521,7 +502,6 @@ app.delete("/api/approvals/delete-many", requireAuth, async (req, res) => {
       });
     }
 
-    // Convert and validate IDs
     const objectIds = ids
       .map((id) => {
         if (mongoose.isValidObjectId(id)) {
@@ -539,7 +519,6 @@ app.delete("/api/approvals/delete-many", requireAuth, async (req, res) => {
       });
     }
 
-    // Perform deletion
     const result = await Approval.deleteMany({
       _id: { $in: objectIds },
       userId: req.session.user.id,
@@ -559,12 +538,10 @@ app.delete("/api/approvals/delete-many", requireAuth, async (req, res) => {
 });
 
 
-// Add this with your other routes
 app.delete('/api/approvals/:id', requireAuth, async (req, res) => {
   try {
     const id = req.params.id;
     
-    // Validate ID format
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ 
         success: false, 
@@ -572,7 +549,6 @@ app.delete('/api/approvals/:id', requireAuth, async (req, res) => {
       });
     }
     
-    // Delete only if record belongs to logged-in user
     const result = await Approval.deleteOne({
       _id: id,
       userId: req.session.user.id
@@ -604,10 +580,8 @@ app.post('/api/delete-column', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Field name required' });
     }
     try {
-        // Remove the field from all documents
         const result = await Approval.updateMany({}, { $unset: { [field]: "" } });
 
-        // Optionally: Remove from in-memory schema (for current session only)
         if (Approval.schema.path(field)) {
             delete Approval.schema.paths[field];
             delete Approval.schema.tree[field];
@@ -619,13 +593,6 @@ app.post('/api/delete-column', async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
-
-
-
-
-
-
-
 
 app.get('/verify-email', async (req, res) => {
   const { token } = req.query;
@@ -664,7 +631,6 @@ app.get('/verify-email', async (req, res) => {
     user.emailVerificationExpires = undefined;
     await user.save();
 
-    // Send styled success page with auto-redirect
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -751,7 +717,6 @@ app.get('/verify-email', async (req, res) => {
                 window.location.href = '/login';
               }, 5000);
               
-              // Start countdown
               updateCountdown();
             };
           </script>
@@ -792,17 +757,10 @@ app.get('/verify-email', async (req, res) => {
   }
 });
 
-
-
-
-
-
-// Password Reset Page
 app.get("/reset-password/:token", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "reset-password.html"));
 });
 
-// Password Update Handler
 app.post("/api/reset-password/:token", async (req, res) => {
   try {
     const { token } = req.params;
@@ -817,7 +775,6 @@ app.post("/api/reset-password/:token", async (req, res) => {
       return res.json({ success: false, message: "Invalid or expired token" });
     }
 
-    // Update password
     user.password = await bcrypt.hash(password, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
@@ -838,7 +795,6 @@ app.post("/api/login", async (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
-    // Check if user is blocked
     if (user.blockExpires && user.blockExpires > new Date()) {
       return res.json({
         success: false,
@@ -857,11 +813,9 @@ app.post("/api/login", async (req, res) => {
       return res.json({ success: false, message: "Invalid credentials" });
     }
 
-    // Reset failed attempts on successful login
     user.failedLoginAttempts = 0;
     user.blockExpires = null;
 
-    // Check email verification BEFORE saving and session creation
     if (!user.isVerified) {
       return res.status(403).json({ 
         success: false, 
@@ -912,7 +866,6 @@ app.get("/api/data", requireAuth, async (req, res) => {
   }
 });
 
-// Form Submission Route (Protected and Modified)
 app.post("/submit", requireAuth, async (req, res) => {
   try {
     let {
@@ -926,31 +879,37 @@ app.post("/submit", requireAuth, async (req, res) => {
       approvalNo,
       grantedOn,
       validTill,
-      emails,
+      performerEmail,
+      unitHeadEmail,
+      unitChiefEmail,
+      headEnvironmentEmail,
+      complianceEmail
     } = req.body;
 
-    // Convert comma-separated string to array
-    if (typeof emails === "string") {
-      emails = emails
-        .split(",")
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0);
-    }
+    const emails = [
+        performerEmail,
+        unitHeadEmail,
+        unitChiefEmail,
+        headEnvironmentEmail,
+        complianceEmail
+    ];
 
-    // Validate emails array
-    if (!Array.isArray(emails) || emails.length === 0) {
-      return res.status(400).send("At least one email is required");
+    if (!Array.isArray(emails) || emails.length !== 5) {
+      return res.status(400).send("Exactly five emails are required");
     }
 
     const invalidEmails = emails.filter((email) => !validateEmail(email));
     if (invalidEmails.length > 0) {
       return res
         .status(400)
-        .send(`Invalid emails: ${invalidEmails.join(", ")}`);
+        .send(`Invalid emails found: ${invalidEmails.join(", ")}`);
     }
-
-    if (!validateRequiredFields(req.body)) {
-      return res.status(400).send("All fields are required");
+    
+    const requiredFields = { state, location, plant, site, facility, typeOfApproval, category, approvalNo, grantedOn, validTill };
+    for(const field in requiredFields) {
+        if(!requiredFields[field]){
+            return res.status(400).send(`Field '${field}' is required.`);
+        }
     }
 
     const dates = parseDates(grantedOn, validTill);
@@ -970,24 +929,33 @@ app.post("/submit", requireAuth, async (req, res) => {
       grantedOn: dates.grantedOnDate,
       validTill: dates.validTillDate,
       emails,
-      userId: req.session.user.id, // Associate with logged-in user
+      userId: req.session.user.id,
     });
 
     await newApproval.save();
-        res.send("Approval registered successfully");
-    } catch (err) {
-        res.status(500).send("Database error");
-    }
+    res.send("Approval registered successfully");
+  } catch (err) {
+    console.error("Submit error:", err);
+    res.status(500).send("Database error");
+  }
 });
 
-// Excel Upload Route (Protected and Modified)
 app.post("/api/upload-excel", requireAuth, async (req, res) => {
   try {
-    const data = req.body.data;
+    const { data, emails } = req.body;
+    
     if (!data || !Array.isArray(data) || data.length === 0) {
       return res
         .status(400)
         .json({ success: false, message: "No valid data provided" });
+    }
+
+    if (!Array.isArray(emails) || emails.length !== 5) {
+        return res.status(400).json({ success: false, message: "Five notification emails are required." });
+    }
+    const invalidEmails = emails.filter((email) => !validateEmail(email));
+    if (invalidEmails.length > 0) {
+        return res.status(400).json({ success: false, message: `Invalid emails provided: ${invalidEmails.join(", ")}` });
     }
 
     const transformedData = data.map((record) => {
@@ -1001,11 +969,10 @@ app.post("/api/upload-excel", requireAuth, async (req, res) => {
           record["Type of approval"] || record["typeOfApproval"] || "",
         category: record["Category"] || record["category"] || "",
         approvalNo: record["Approval No."] || record["approvalNo"] || "",
-        emails: record["emails"],
-        userId: req.session.user.id, // Associate with logged-in user
+        emails: emails,
+        userId: req.session.user.id,
       };
 
-      // Handle date fields
       if (record["Granted on"] || record["grantedOn"]) {
         const grantedDate = new Date(
           record["Granted on"] || record["grantedOn"]
@@ -1047,11 +1014,10 @@ app.post("/api/upload-excel", requireAuth, async (req, res) => {
   }
 });
 
-// Stop emails route (Protected and Modified)
 app.post("/api/stop-emails/:id", requireAuth, async (req, res) => {
   try {
     const updated = await Approval.findOneAndUpdate(
-      { _id: req.params.id, userId: req.session.user.id }, // Ensure user owns the record
+      { _id: req.params.id, userId: req.session.user.id },
       { $set: { stopEmails: true } },
       { new: true }
     );
@@ -1061,7 +1027,6 @@ app.post("/api/stop-emails/:id", requireAuth, async (req, res) => {
   }
 });
 
-// Helper functions (your existing functions)
 function calculateReminderDate(validTillDate) {
   const reminderDate = new Date(validTillDate);
   reminderDate.setMonth(reminderDate.getMonth() - 3);
@@ -1069,6 +1034,7 @@ function calculateReminderDate(validTillDate) {
 }
 
 function validateEmail(email) {
+  if (!email) return false;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
@@ -1099,16 +1065,14 @@ function parseDates(grantedOn, validTill) {
   };
 }
 
-// EmailJS Configuration (your existing configuration)
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER, // replace with your email
-    pass: process.env.EMAIL_PASS, // use App Password if using Gmail
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
-// Email sending function (add anywhere in app.js)
 function sendResetEmail(email, token) {
   const mailOptions = {
     from: "your-email@gmail.com",
@@ -1152,7 +1116,6 @@ cron.schedule(
             console.warn(`Skipping deleted approval: ${approval._id}`);
             continue;
           }
-          // Skip expired approvals
           if (daysRemaining < 120) {
       if (approval.lastEmailSentAt) {
         approval.lastEmailSentAt = null;
@@ -1164,7 +1127,7 @@ cron.schedule(
           const targetDays = [240, 210, 180, 150, 135, 127,120];
           const shouldNotify =
             (targetDays.includes(daysRemaining)) &&
-            !approval.notifiedDays.includes(daysRemaining); // Critical check
+            !approval.notifiedDays.includes(daysRemaining);
 
           if (shouldNotify) {
             await sendReminderEmail(approval, daysRemaining);
@@ -1183,61 +1146,38 @@ cron.schedule(
   { timezone: "Asia/Kolkata" }
 );
 
-// Email sending function (Fixed)
-async function sendReminderEmail(approval) {
+async function sendReminderEmail(approval, daysRemaining) {
   try {
     const validTillDate = new Date(approval.validTill);
     const grantedDate = new Date(approval.grantedOn);
-    const daysRemaining = Math.ceil(
-      (validTillDate - new Date()) / (1000 * 60 * 60 * 24)
-    );
-
-    // Prevent sending emails for expired approvals
-    if (daysRemaining < 120) return;
-
-    // Determine which emails to notify based on daysRemaining
+    
+    const [performer, unitHead, unitChief, headEnv, compliance] = approval.emails;
+    
     let emailsToNotify = [];
-    if (daysRemaining === 240 || daysRemaining === 210 || daysRemaining === 180) {
-      if (approval.emails && approval.emails.length >= 1)
-        emailsToNotify = [approval.emails[0]];
+
+    if (daysRemaining >= 180) {
+        emailsToNotify.push(performer);
     } else if (daysRemaining === 150) {
-      if (approval.emails && approval.emails.length >= 3)
-        emailsToNotify = [
-          approval.emails[0],
-          approval.emails[1],
-          approval.emails[2],
-        ];
+        emailsToNotify.push(performer, unitHead, unitChief);
     } else if (daysRemaining === 135) {
-      if (approval.emails && approval.emails.length >= 4)
-        emailsToNotify = [
-          approval.emails[0],
-          approval.emails[1],
-          approval.emails[2],
-          approval.emails[3],
-        ];
-    } else if (daysRemaining === 127) {
-      if (approval.emails && approval.emails.length >= 4)
+        emailsToNotify.push(performer, unitHead, unitChief, headEnv);
+    } else if (daysRemaining <= 127) {
         emailsToNotify = approval.emails;
-    } else if (
-      (daysRemaining === 120)
-    ) {
-      if (approval.emails && approval.emails.length > 0)
-        emailsToNotify = approval.emails;
-    } else return;
+    } else {
+        return;
+    }
 
-    // Validate emails
-    const validEmails = emailsToNotify.filter((email) =>
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    );
-    if (validEmails.length === 0) return;
+    const validEmails = emailsToNotify.filter(email => validateEmail(email));
+    if (validEmails.length === 0) {
+        console.log(`No valid emails to send for approval ${approval.approvalNo}`);
+        return;
+    }
 
-    // Set 'to' as the first email, 'cc' as the rest (if any)
     const toEmail = validEmails[0];
     const ccEmails = validEmails.length > 1 ? validEmails.slice(1) : undefined;
     
-    
-      const mailOptions = {
-        from: '"Approvals Reminder" <your.email@gmail.com>', // sender address
+    const mailOptions = {
+        from: `"Approvals Reminder" <${process.env.EMAIL_USER}>`,
         to: toEmail,
         cc: ccEmails,
         subject: `🚨 Approval Expiry Reminder - ${approval.approvalNo}`,
@@ -1246,64 +1186,49 @@ async function sendReminderEmail(approval) {
           <p><strong>Facility Name:</strong> ${approval.facility}</p>
           <p><strong>Approval Number:</strong> ${approval.approvalNo}</p>
           <p><strong>Approval Type:</strong> ${approval.typeOfApproval}</p>
-          <p><strong>Approval Category:</strong> ${approval.category}</p>
-          <p><strong>Facility Location:</strong> ${approval.location}, ${approval.state}</p>
           <p><strong>Granted On:</strong> ${grantedDate.toDateString()}</p>
           <p><strong>Valid Till:</strong> ${validTillDate.toDateString()}</p>
-          <p><strong>Days Remaining:</strong> ${daysRemaining-120}</p>
+          <p><strong>Days Remaining until expiry:</strong> ${daysRemaining}</p>
           <hr>
           <p>Please take necessary actions before expiry.</p>
         `,
-      };
+    };
 
-      await transporter.sendMail(mailOptions);
-    
+    await transporter.sendMail(mailOptions);
+    console.log(`Reminder sent for ${approval.approvalNo} to ${validEmails.join(', ')}`);
 
-    // Update lastEmailSentAt
-    approval.lastEmailSentAt = new Date();
-    await approval.save();
   } catch (err) {
     console.error("Email send error:", err);
     throw err;
   }
 }
 
-// Add near other API endpoints, after express middlewares and before your app.listen
-
-// This endpoint listens for JSON payloads sent by Google Apps Script
 app.post('/api/form-submission', async (req, res) => {
   try {
-    // Get data from Google Apps Script POST
     const { approvalId, email, fileUrl } = req.body;
 
     if (!approvalId || !email || !fileUrl) {
       return res.status(400).json({ success: false, message: "Missing required fields." });
     }
 
-    // Find the relevant record in your Approvals collection using Approval ID
     const approval = await Approval.findOne({ _id: approvalId });
     if (!approval) {
       return res.status(404).json({ success: false, message: "Approval not found." });
     }
 
-    // 1. SAVE UPLOADED FILE LINK IN DB
     approval.uploadedFormDocs = approval.uploadedFormDocs || [];
     approval.uploadedFormDocs.push({ email, fileUrl, submittedAt: new Date() });
     await approval.save();
 
-    // 2. SEND NOTIFICATION EMAIL TO THE 4th (or LAST) APPROVER
-    // Determine the approver's email
     let recipient = '';
     if (approval.emails.length >= 4) {
       recipient = approval.emails[3];
     } else if (approval.emails.length > 0) {
       recipient = approval.emails[approval.emails.length - 1];
     } else {
-      // No email to send to
       return res.status(200).json({ success: true, message: "No approver email found to notify, saved file URL." });
     }
 
-    // Compose record details (customize for your actual fields)
     const details = `
       <strong>Approval Details:</strong><br>
       State: ${approval.state}<br>
@@ -1318,12 +1243,10 @@ app.post('/api/form-submission', async (req, res) => {
       Valid Till: ${approval.validTill ? new Date(approval.validTill).toLocaleDateString() : ''}<br>
     `;
 
-    // Build the confirmation URL
     const confirmLink = `https://scheduler-98q6.onrender.com/api/approvals/${approval._id}/confirm-stop`;
 
-    // Compose email
     const mailOptions = {
-      from: '"Approvals System" <shaileshmurmucool@email.com>', // Update with your address
+      from: '"Approvals System" <shaileshmurmucool@email.com>',
       to: recipient,
       subject: 'Request for Stop Notification Emails: Approval ' + approval.approvalNo,
       html: `
@@ -1336,12 +1259,10 @@ app.post('/api/form-submission', async (req, res) => {
       `
     };
 
-    // Send the email (transporter is your existing nodemailer transporter)
     await transporter.sendMail(mailOptions);
     console.log(`Notified ${recipient} with stop request for approval ID ${approvalId}`);
 
 
-    // 3. Respond as success
     res.json({ success: true, message: `Received and notified approver for approval ID ${approvalId}` });
   } catch (error) {
     console.error('Error handling Google Form submission:', error);
