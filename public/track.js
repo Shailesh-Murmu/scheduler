@@ -1,97 +1,162 @@
+/**
+ * This script manages the entire functionality for the Approval Records table,
+ * including fetching data, populating the table, searching, filtering,
+ * deleting records (single and bulk), and the updated click-to-edit feature.
+ */
+
+// Global variables to manage state
 let pendingBulkDeletionIds = [];
 let bulkUndoTimeout = null;
+let allData = []; // Store all fetched data globally
+let lastDeletedRecord = null;
+let undoTimeout = null;
 
+// Main setup after the page is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    const headers = document.querySelectorAll('#approval-table th');
-    
-    headers.forEach((header, index) => {
-        // Create filter container
-        const filterDiv = document.createElement('div');
-        filterDiv.className = 'filter-dropdown';
-        header.appendChild(filterDiv);
-        
-        // Add click handler
-        header.addEventListener('click', (e) => {
-            if (index >= 14) return; // Skip action columns
-            
-            // Remove existing dropdowns
-            document.querySelectorAll('.filter-options').forEach(d => d.remove());
-            
-            // Get unique values
-            const values = Array.from(document.querySelectorAll(`#approval-table td:nth-child(${index+1})`))
-                .map(td => td.textContent.trim())
-                .filter((value, i, self) => value && self.indexOf(value) === i);
+    // Initial fetch of data to populate the table
+    fetchDataAndUpdateTable();
 
-            // Create dropdown
-            const options = document.createElement('div');
-            options.className = 'filter-options';
-            
-            // Add "Show All" option
-            const showAll = document.createElement('div');
-            showAll.className = 'filter-option';
-            showAll.textContent = 'Show All';
-            showAll.onclick = () => filterTable('');
-            options.appendChild(showAll);
+    // Listener for the main search input field
+    document.getElementById('search-input').addEventListener('input', function() {
+        const query = this.value.trim().toLowerCase();
+        const filtered = allData.filter(record => {
+            const today = new Date();
+            const currentDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+            const validTillDate = record.validTill ? new Date(record.validTill) : null;
+            let status = 'Not Valid';
+            if (validTillDate) {
+                const validTillUTC = new Date(Date.UTC(
+                    validTillDate.getUTCFullYear(),
+                    validTillDate.getUTCMonth(),
+                    validTillDate.getUTCDate()
+                ));
+                if (currentDate <= validTillUTC) {
+                    status = 'Valid';
+                }
+            }
+            const emailSentStatus = record.reminderSent ? 'yes' : 'no';
 
-            // Add unique values
-            values.forEach(value => {
-                const option = document.createElement('div');
-                option.className = 'filter-option';
-                option.textContent = value;
-                option.onclick = () => filterTable(value, index+1);
-                options.appendChild(option);
+            const recordValues = Object.values(record).join(' ').toLowerCase();
+            const emailValues = (record.emails || []).join(' ').toLowerCase();
+
+            return (
+                recordValues.includes(query) ||
+                emailValues.includes(query) ||
+                status.toLowerCase().includes(query) ||
+                emailSentStatus.toLowerCase().includes(query)
+            );
+        });
+        populateTable(filtered);
+    });
+
+    // Listener for the "Delete All Displayed" button
+    document.getElementById('deleteAllBtn').addEventListener('click', () => {
+        const visibleRows = Array.from(document.querySelectorAll('#approval-table tbody tr'))
+            .filter(row => row.style.display !== 'none');
+        const visibleIds = visibleRows.map(row => row.dataset.id);
+
+        if (visibleIds.length === 0) {
+            alert('No visible records to delete');
+            return;
+        }
+        pendingBulkDeletionIds = visibleIds;
+        const deletedRecords = allData.filter(record => visibleIds.includes(record._id));
+        allData = allData.filter(record => !visibleIds.includes(record._id));
+        populateTable(allData);
+        showUndoSnackbar(`${deletedRecords.length} records deleted.`, () => {
+            clearTimeout(bulkUndoTimeout);
+            pendingBulkDeletionIds = [];
+            allData = [...allData, ...deletedRecords].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            populateTable(allData);
+        });
+        bulkUndoTimeout = setTimeout(() => {
+            if (pendingBulkDeletionIds.length > 0) {
+                finalizeBulkDelete(pendingBulkDeletionIds);
+            }
+        }, 5000);
+    });
+
+    // Event delegation for delete and edit
+    document.getElementById('approval-table').addEventListener('click', function(e) {
+        if (e.target.classList.contains('delete-btn')) {
+            const id = e.target.getAttribute('data-id');
+            if (confirm('Are you sure you want to delete this record?')) {
+                softDeleteRecord(id);
+            }
+            return;
+        }
+
+        const cell = e.target.closest('.editable-cell');
+        if (!cell || cell.querySelector('.edit-in-place')) return;
+
+        const originalText = cell.textContent.trim();
+        const field = cell.dataset.field;
+        const row = cell.closest('tr');
+        const id = row.dataset.id;
+
+        if (!id || !field) return;
+
+        cell.innerHTML = '';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'edit-in-place';
+        input.value = originalText;
+        cell.appendChild(input);
+        input.focus();
+        input.select();
+
+        const saveChanges = () => {
+            const newValue = input.value.trim();
+            cell.textContent = newValue;
+
+            fetch('/api/update-cell', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ id, field, value: newValue })
+            }).then(res => {
+                if (!res.ok) {
+                    console.error("Failed to save changes.");
+                    cell.textContent = originalText;
+                }
+            }).catch(err => {
+                console.error("Error saving changes:", err);
+                cell.textContent = originalText;
             });
+        };
 
-            filterDiv.appendChild(options);
-            options.classList.toggle('show');
+        input.addEventListener('blur', saveChanges);
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') input.blur();
+            else if (event.key === 'Escape') {
+                input.removeEventListener('blur', saveChanges);
+                cell.textContent = originalText;
+            }
         });
     });
 
-    // Close dropdown when clicking outside
+    // Global click listener to close filter dropdowns
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.filter-dropdown')) {
-            document.querySelectorAll('.filter-options').forEach(d => d.remove());
+            document.querySelectorAll('.filter-dropdown').forEach(d => d.remove());
         }
     });
 });
 
-function filterTable(value, columnIndex) {
-    const rows = document.querySelectorAll('#approval-table tbody tr');
-    
-    rows.forEach(row => {
-        const cell = row.querySelector(`td:nth-child(${columnIndex})`);
-        if (!columnIndex || cell.textContent.trim() === value || value === '') {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
-}
-
-
-let allData = []; // Store all fetched data globally
-
-function openGoogleForm(approvalId, emails) {
+// REVERTED FUNCTION: Opens the Google Form in a new tab
+function openGoogleForm(approvalId) {
   if (confirm("Are you sure you want to stop all future emails for this record?")) {
-    // Replace with your actual Google Form URL
     let formBaseUrl = "https://docs.google.com/forms/d/e/1FAIpQLSdtmQmzRqdGq9YmJYObfHWuyEhIcdxL7dq6TqlC3Zf4lsDTSg/viewform";
-    var approvalIdEntry = "entry.201971047"; // Replace with your real entry code
+    var approvalIdEntry = "entry.201971047";
     var prefilledUrl = `${formBaseUrl}?usp=pp_url&${approvalIdEntry}=${encodeURIComponent(approvalId)}`;
     window.open(prefilledUrl, '_blank');
   }
 }
 
-
-
 function getColumnNames(data) {
   const exclude = new Set([
     '_id', 'createdAt', 'updatedAt', 'reminderSent', '__v', 'lastEmailSentAt',
-    'stopEmails', 'userId', 'status', 'notifiedDays'
+    'stopEmails', 'userId', 'status', 'notifiedDays', 'emails', 'uploadedFormDocs'
   ]);
-  // Exclude columns deleted by user
-  // const deletedCols = JSON.parse(localStorage.getItem('deletedColumns') || '[]');
-  // deletedCols.forEach(col => exclude.add(col));
-
   const columns = new Set();
   data.forEach(item => {
     Object.keys(item).forEach(key => {
@@ -100,137 +165,47 @@ function getColumnNames(data) {
       }
     });
   });
-
   return Array.from(columns);
 }
 
-
-
-
-
-document.addEventListener('DOMContentLoaded', () => {
-    fetch('/api/data')
-        .then(res => res.json())
-        .then(data => {
-            allData = data;
-            populateTable(allData);
-            addHeaderFilterListeners();
-        })
-        .catch(err => {
-            document.querySelector('#approval-table tbody').innerHTML = `<tr><td colspan="99">Error loading data</td></tr>`;
-        });
-    // fetch('/api/data')
-    //     .then(res => res.json())
-    //     .then(data => {
-    //         allData = data;
-    //         populateTable(allData);
-    //         addHeaderFilterListeners();
-    //     })
-    //     .catch(err => {
-    //         document.querySelector('#approval-table tbody').innerHTML =
-    //             `<tr><td colspan="15">Error loading data</td></tr>`;
-    //     });
-
-    document.getElementById('search-input').addEventListener('input', function() {
-    const query = this.value.trim().toLowerCase();
-    const filtered = allData.filter(record => {
-        const today = new Date();
-        const currentDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-        const validTillDate = record.validTill ? new Date(record.validTill) : null;
-        let status = 'Not Valid';
-        if (validTillDate) {
-            const validTillUTC = new Date(Date.UTC(
-                validTillDate.getUTCFullYear(),
-                validTillDate.getUTCMonth(),
-                validTillDate.getUTCDate()
-            ));
-            if (currentDate <= validTillUTC) {
-                status = 'Valid';
-            }
-        }
-        const emailSentStatus = record.reminderSent ? 'yes' : 'no';
-
-        return (
-            Object.values(record).some(val =>
-                String(val).toLowerCase().includes(query)
-            ) ||
-            status.toLowerCase() === query ||      // Exact match for status
-            emailSentStatus === query              // Exact match for email sent
-        );
-    });
-    populateTable(filtered);
-});
-
-
-
-});
-
-
-function handleCellEdit(event) {
-    const td = event.target;
-    const newValue = td.textContent;
-    const field = td.dataset.field || td.getAttribute('data-field');
-    const row = td.closest('tr');
-    const id = row.dataset.id; // Make sure each <tr> has data-id attribute with document's _id
-
-    fetch('/api/update-cell', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ id, field, value: newValue })
-    });
-}
-
 function populateTable(data) {
-  // Get dynamic columns
-  console.log('Fetched data:', data);
-  console.log('Columns:', getColumnNames(data));
   const columns = getColumnNames(data);
-
-  // Render table header
+  const emailColumnNames = ['Performer Email', 'Unit Head Email', 'Unit Chief Email', 'Head Environment Email', 'Compliance Email'];
   const thead = document.querySelector('#approval-table thead');
+  
+  // ADDED 'DOCUMENTS' HEADER
   thead.innerHTML = '<tr>' +
     columns.map(col => 
       `<th>
-        ${col.toUpperCase()}
-        <button class="delete-col-btn" data-field="${col}" title="Delete column" style="margin-left:6px;color:#e53935;">&#128465;</button>
+        ${col.replace(/([A-Z])/g, ' $1').trim().toUpperCase()}
+        <button class="delete-col-btn" data-field="${col}" title="Delete column" style="margin-left:6px;color:#e53935; border:none; background:transparent; cursor:pointer;">&#128465;</button>
       </th>`
     ).join('') +
-    '<th>Status</th><th>Last Email Sent</th><th>Delete</th><th>Active</th></tr>';
+    emailColumnNames.map(col => `<th>${col.toUpperCase()}</th>`).join('') +
+    '<th>Status</th><th>Last Email Sent</th><th>Delete</th><th>Active</th><th>Documents</th></tr>';
 
-  // Attach delete column handlers
-  // In your populateTable or similar function:
-// In your populateTable or similar function:
-thead.querySelectorAll('.delete-col-btn').forEach(btn => {
-  btn.onclick = function(e) {
-    e.stopPropagation();
-    const field = this.getAttribute('data-field');
-    if (confirm(`Are you sure you want to delete the column "${field}"? This will remove the field from all records.`)) {
-      fetch('/api/delete-column', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field })
-      })
-      .then(res => res.json())
-      .then(result => {
-        if (result.success) {
-          // Optionally: Remove from localStorage if you use a deletedColumns list
-          let deletedCols = JSON.parse(localStorage.getItem('deletedColumns') || '[]');
-          if (!deletedCols.includes(field)) deletedCols.push(field);
-          localStorage.setItem('deletedColumns', JSON.stringify(deletedCols));
-          // Fetch fresh data and update table
-          fetchDataAndUpdateTable();
-        } else {
-          alert('Failed to delete column: ' + (result.message || 'Unknown error'));
+  thead.querySelectorAll('.delete-col-btn').forEach(btn => {
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        const field = this.getAttribute('data-field');
+        if (confirm(`Are you sure you want to delete the column "${field}"? This will remove the field from all records.`)) {
+          fetch('/api/delete-column', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field })
+          })
+          .then(res => res.json())
+          .then(result => {
+            if (result.success) {
+              fetchDataAndUpdateTable();
+            } else {
+              alert('Failed to delete column: ' + (result.message || 'Unknown error'));
+            }
+          });
         }
-      });
-    }
-  };
-});
+      };
+  });
 
-
-
-
-  // Render table body
   const tbody = document.querySelector('#approval-table tbody');
   tbody.innerHTML = '';
   if (!Array.isArray(data) || data.length === 0) {
@@ -242,17 +217,21 @@ thead.querySelectorAll('.delete-col-btn').forEach(btn => {
     const tr = document.createElement('tr');
     tr.setAttribute('data-id', record._id);
 
-    // Render columns in the same order as headers
-    tr.innerHTML = columns.map(col => {
+    let rowHTML = columns.map(col => {
       let value = record[col];
       if (Array.isArray(value)) value = value.join(', ');
       if (['grantedOn', 'validTill', 'lastEmailSentAt'].includes(col)) {
         value = value ? new Date(value).toLocaleDateString() : '';
       }
-      return `<td contenteditable="true" data-field="${col}">${value !== undefined ? value : ''}</td>`;
+      return `<td class="editable-cell" data-field="${col}">${value !== undefined ? value : ''}</td>`;
     }).join('');
 
-    // Add special columns
+    const recordEmails = record.emails || [];
+    for (let i = 0; i < 5; i++) {
+        const email = recordEmails[i] || '';
+        rowHTML += `<td class="editable-cell" data-field="emails.${i}">${email}</td>`;
+    }
+    
     const validTillDate = record.validTill ? new Date(record.validTill) : null;
     let status = 'Not Valid';
     let statusClass = 'status-not-valid';
@@ -261,70 +240,49 @@ thead.querySelectorAll('.delete-col-btn').forEach(btn => {
       statusClass = 'status-valid';
     }
 
-    tr.innerHTML += `
+    // NEW LOGIC: Generate links for uploaded documents
+    let documentsHTML = 'No documents';
+    if (record.uploadedFormDocs && record.uploadedFormDocs.length > 0) {
+        documentsHTML = record.uploadedFormDocs.map((doc, index) => {
+            return `<a href="${doc.fileUrl}" target="_blank" rel="noopener noreferrer" style="color: #8ab4f8;">View Doc ${index + 1}</a>`;
+        }).join('<br>'); // Separate multiple links with a line break
+    }
+
+    // ADDED a new <td> for documents at the end
+    const actionCells = `
       <td class="${statusClass}">${status}</td>
       <td>${record.lastEmailSentAt ? new Date(record.lastEmailSentAt).toLocaleDateString() : 'Not sent yet'}</td>
       <td><button class="delete-btn" data-id="${record._id}" style="color:#fff; background:#e53935; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;">Delete</button></td>
       <td>
-    <button
-      class="stop-email-btn"
-      data-id="${record._id}"
-      style="color:#fff; background:#ff9800; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;"
-      ${record.stopEmails ? 'disabled' : ''}
-      onclick="openGoogleForm('${record._id}', '${(record.emails || []).join(',')}')"
-    >
-      ${record.stopEmails ? 'Stopped' : 'Active'}
-    </button>
-  </td>
+        <button
+          class="stop-email-btn"
+          data-id="${record._id}"
+          style="color:#fff; background:#ff9800; border:none; padding:6px 12px; border-radius:4px; cursor:pointer;"
+          ${record.stopEmails ? 'disabled' : ''}
+          onclick="openGoogleForm('${record._id}')"
+        >
+          ${record.stopEmails ? 'Stopped' : 'Active'}
+        </button>
+      </td>
+      <td>${documentsHTML}</td>
     `;
+    tr.innerHTML = rowHTML + actionCells;
     tbody.appendChild(tr);
   });
-
-  // Open Google Form in a new tab after confirmation
-
-  
-
-  // Inline editing
-  tbody.querySelectorAll('td[contenteditable="true"]').forEach(td => {
-    td.onblur = handleCellEdit;
-  });
-
-  // Stop email buttons
-  // tbody.querySelectorAll('.stop-email-btn').forEach(btn => {
-  //   btn.onclick = function() {
-  //     const id = this.getAttribute('data-id');
-  //     if (confirm('Are you sure you want to stop all future emails for this record?')) {
-  //       fetch(`/api/stop-emails/${id}`, { method: 'POST' }).then(res => {
-  //         if (res.ok) {
-  //           this.textContent = 'Stopped';
-  //           this.disabled = true;
-  //           const record = allData.find(item => item._id === id);
-  //           if (record) record.stopEmails = true;
-  //         } else {
-  //           alert('Failed to stop emails.');
-  //         }
-  //       });
-  //     }
-  //   };
-  // });
 }
-
-
-
 
 function addHeaderFilterListeners() {
   const headers = document.querySelectorAll('#approval-table thead th');
-
   headers.forEach((header, index) => {
-    // Don't add filter to Delete or Stop Sending Mail columns
-    if (index >= 15) return;
+    const totalColumns = headers.length;
+    if (index >= totalColumns - 4) return;
 
     header.style.cursor = 'pointer';
     header.addEventListener('click', (event) => {
-      // Prevent multiple dropdowns
+      if (event.target.classList.contains('delete-col-btn') || event.target.isContentEditable) return;
+      
       document.querySelectorAll('.filter-dropdown').forEach(el => el.remove());
-
-      // Collect unique values from the column
+      
       const rows = document.querySelectorAll('#approval-table tbody tr');
       const uniqueValues = new Set();
       rows.forEach(row => {
@@ -332,58 +290,37 @@ function addHeaderFilterListeners() {
         if (cell) uniqueValues.add(cell.textContent.trim());
       });
 
-      // Create dropdown container
       const dropdown = document.createElement('div');
       dropdown.classList.add('filter-dropdown');
-      dropdown.style.position = 'fixed';
-      dropdown.style.background = '#fff';
-      dropdown.style.border = '1px solid #ccc';
-      dropdown.style.zIndex = 1000;
-      dropdown.style.maxHeight = '200px';
-      dropdown.style.overflowY = 'auto';
-      dropdown.style.minWidth = '120px';
-
-      // Position dropdown below header
+      Object.assign(dropdown.style, {
+          position: 'absolute', background: '#fff', border: '1px solid #ccc',
+          zIndex: 1000, maxHeight: '200px', overflowY: 'auto', minWidth: '160px', color: '#333'
+      });
+      
       const rect = header.getBoundingClientRect();
-      dropdown.style.left = `${rect.left}px`;
-      dropdown.style.top = `${rect.bottom}px`;
+      Object.assign(dropdown.style, { left: `${rect.left}px`, top: `${rect.bottom}px` });
 
-      // Add 'Show All' option
       const showAllOption = document.createElement('div');
       showAllOption.textContent = 'Show All';
-      showAllOption.style.padding = '8px';
-      showAllOption.style.cursor = 'pointer';
-      showAllOption.style.borderBottom = '1px solid #eee';
-      showAllOption.addEventListener('click', () => {
+      Object.assign(showAllOption.style, { padding: '8px', cursor: 'pointer', borderBottom: '1px solid #eee' });
+      showAllOption.onclick = () => {
         filterTableByColumn(index, null);
         dropdown.remove();
-      });
+      };
       dropdown.appendChild(showAllOption);
 
-      // Add unique values as options
       uniqueValues.forEach(value => {
         const option = document.createElement('div');
         option.textContent = value;
-        option.style.padding = '8px';
-        option.style.cursor = 'pointer';
-        option.style.borderBottom = '1px solid #eee';
-        option.addEventListener('click', () => {
+        Object.assign(option.style, { padding: '8px', cursor: 'pointer', borderBottom: '1px solid #eee' });
+        option.onclick = () => {
           filterTableByColumn(index, value);
           dropdown.remove();
-        });
+        };
         dropdown.appendChild(option);
       });
 
       document.body.appendChild(dropdown);
-
-      // Close dropdown if clicking outside
-      const closeDropdown = (e) => {
-        if (!dropdown.contains(e.target) && e.target !== header) {
-          dropdown.remove();
-          document.removeEventListener('click', closeDropdown);
-        }
-      };
-      setTimeout(() => document.addEventListener('click', closeDropdown), 0);
       event.stopPropagation();
     });
   });
@@ -401,65 +338,6 @@ function filterTableByColumn(columnIndex, filterValue) {
   });
 }
 
-
-
-
-
-// Update the delete button handler
-document.getElementById('deleteAllBtn').addEventListener('click', () => {
-  // Get visible IDs
-  const visibleRows = Array.from(document.querySelectorAll('#approval-table tbody tr'))
-    .filter(row => row.style.display !== 'none');
-  
-  const visibleIds = visibleRows.map(row => row.dataset.id);
-
-  if (visibleIds.length === 0) {
-    alert('No visible records to delete');
-    return;
-  }
-
-  // Store IDs for possible deletion
-  pendingBulkDeletionIds = visibleIds;
-  
-  // Remove from UI immediately
-  const deletedRecords = allData.filter(record => visibleIds.includes(record._id));
-  allData = allData.filter(record => !visibleIds.includes(record._id));
-  populateTable(allData);
-  
-  // Show undo snackbar
-  const snackbar = document.getElementById('undo-snackbar');
-  const messageSpan = document.getElementById('undo-message');
-  const undoBtn = document.getElementById('undo-btn');
-  
-  messageSpan.textContent = `${deletedRecords.length} records deleted. Click undo to revert.`;
-  snackbar.style.visibility = 'visible';
-
-  // Clear previous listeners
-  const newUndoBtn = undoBtn.cloneNode(true);
-  undoBtn.parentNode.replaceChild(newUndoBtn, undoBtn);
-
-  newUndoBtn.addEventListener('click', () => {
-    // Cancel pending deletion
-    clearTimeout(bulkUndoTimeout);
-    pendingBulkDeletionIds = [];
-    snackbar.style.visibility = 'hidden';
-    
-    // Restore records
-    allData = [...allData, ...deletedRecords];
-    populateTable(allData);
-  });
-  
-  // Schedule actual deletion after 5 seconds
-  bulkUndoTimeout = setTimeout(() => {
-    snackbar.style.visibility = 'hidden';
-    if (pendingBulkDeletionIds.length > 0) {
-      finalizeBulkDelete(pendingBulkDeletionIds);
-    }
-  }, 5000);
-});
-
-
-// Add this function for final bulk deletion
 function finalizeBulkDelete(ids) {
     fetch('/api/approvals/delete-many', {
         method: 'DELETE',
@@ -468,73 +346,23 @@ function finalizeBulkDelete(ids) {
     })
     .then(res => res.json())
     .then(result => {
-        if (!result.success) {
-            console.error('Bulk delete failed:', result.message);
-            // Restore records on failure
-            allData = [...allData, ...lastBulkDeletedRecords];
-            populateTable(allData);
-        }
-        lastBulkDeletedRecords = [];
+        if (!result.success) console.error('Bulk delete failed:', result.message);
     })
-    .catch(error => {
-        console.error('Bulk delete error:', error);
-        allData = [...allData, ...lastBulkDeletedRecords];
-        populateTable(allData);
-        lastBulkDeletedRecords = [];
-    });
+    .catch(error => console.error('Bulk delete error:', error));
 }
-
-
-function finalizeDelete(id) {
-  fetch(`/api/approvals/${id}`, {  // Correct endpoint
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' }
-  })
-  .then(res => res.json())
-  .then(result => {
-    if (!result.success) {
-      alert('Failed to delete record: ' + (result.message || 'Unknown error'));
-      // Restore to UI
-      if (lastDeletedRecord) {
-        allData.push(lastDeletedRecord);
-        populateTable(allData);
-      }
-    }
-    lastDeletedRecord = null;
-  })
-  .catch(error => {
-    alert('Network error during deletion');
-    if (lastDeletedRecord) {
-      allData.push(lastDeletedRecord);
-      populateTable(allData);
-    }
-    lastDeletedRecord = null;
-  });
-}
-
-
-
-
 
 async function fetchDataAndUpdateTable() {
   try {
-    const response = await fetch('/api/data'); // Your data endpoint
+    const response = await fetch('/api/data');
     const data = await response.json();
     allData = data;
     populateTable(allData);
+    addHeaderFilterListeners();
   } catch (error) {
     console.error('Failed to fetch data:', error);
   }
 }
 
-
-
-// --- Undo Delete Feature ---
-
-let lastDeletedRecord = null;
-let undoTimeout = null;
-
-// Show snackbar
 function showUndoSnackbar(message, undoCallback) {
     const snackbar = document.getElementById('undo-snackbar');
     const messageSpan = document.getElementById('undo-message');
@@ -543,7 +371,6 @@ function showUndoSnackbar(message, undoCallback) {
     messageSpan.textContent = message;
     snackbar.style.visibility = 'visible';
 
-    // Remove previous listeners
     const newUndoBtn = undoBtn.cloneNode(true);
     undoBtn.parentNode.replaceChild(newUndoBtn, undoBtn);
 
@@ -553,25 +380,20 @@ function showUndoSnackbar(message, undoCallback) {
         if (undoCallback) undoCallback();
     });
 
-    // Hide after 5 seconds
     undoTimeout = setTimeout(() => {
         snackbar.style.visibility = 'hidden';
-        // If not undone, finalize deletion
         if (lastDeletedRecord) finalizeDelete(lastDeletedRecord._id);
         lastDeletedRecord = null;
     }, 5000);
 }
 
-// Soft delete: Remove from table, but not from server yet
 function softDeleteRecord(id) {
-    // Find and remove from allData
     const idx = allData.findIndex(item => item._id === id);
     if (idx !== -1) {
         lastDeletedRecord = allData[idx];
         allData.splice(idx, 1);
         populateTable(allData);
         showUndoSnackbar("Record deleted.", () => {
-            // Undo: restore
             allData.splice(idx, 0, lastDeletedRecord);
             populateTable(allData);
             lastDeletedRecord = null;
@@ -579,9 +401,7 @@ function softDeleteRecord(id) {
     }
 }
 
-// Finalize delete: Actually remove from server
 function finalizeDelete(id) {
-  // Change the endpoint to match the backend route
   fetch(`/api/approvals/${id}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' }
@@ -590,7 +410,6 @@ function finalizeDelete(id) {
   .then(result => {
     if (!result.success) {
       alert('Failed to delete record: ' + (result.message || 'Unknown error'));
-      // Restore to UI
       if (lastDeletedRecord) {
         allData.push(lastDeletedRecord);
         populateTable(allData);
@@ -607,12 +426,3 @@ function finalizeDelete(id) {
     lastDeletedRecord = null;
   });
 }
-
-document.getElementById('approval-table').addEventListener('click', function(e) {
-    if (e.target.classList.contains('delete-btn')) {
-        const id = e.target.getAttribute('data-id');
-        if (confirm('Are you sure you want to delete this record?')) {
-            softDeleteRecord(id);
-        }
-    }
-});
