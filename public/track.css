@@ -98,53 +98,11 @@ tr:hover {
 }
 
 /* Status Badges */
-td:nth-child(12) { /* Status column */
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    position: relative;
-    padding-left: 35px;
-}
-
-td:nth-child(12)::before {
-    content: '';
-    position: absolute;
-    left: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-}
-
 td.status-valid {
     color: #00e676;
 }
 
-td.status-valid::before {
-    background: #00e676;
-    box-shadow: 0 0 8px rgba(0, 230, 118, 0.3);
-}
-
 td.status-not-valid {
-    color: #ff5252;
-}
-
-td.status-not-valid::before {
-    background: #ff5252;
-    box-shadow: 0 0 8px rgba(255, 82, 82, 0.3);
-}
-
-/* Email Status */
-td:nth-child(14) { /* Email Sent column */
-    font-weight: 500;
-}
-
-td:contains("Yes") {
-    color: #00e676;
-}
-
-td:contains("No") {
     color: #ff5252;
 }
 
@@ -182,7 +140,6 @@ body {
     background-size: cover;
     background-repeat: no-repeat;
     background-attachment: fixed;
-    /* display: flex; */
     justify-content: center;
     align-items: flex-start;
     padding-top: 48px;
@@ -218,7 +175,6 @@ body {
     letter-spacing: 0.5px;
 }
 
-
 .filter-dropdown {
     position: relative;
     display: inline-block;
@@ -247,29 +203,6 @@ body {
 
 .show { display: block; }
 
-.category-red {
-    /* background-color: #ffdddd !important; */
-    color: #b71c1c !important;
-    font-weight: bold;
-}
-.category-green {
-    /* background-color: #ddffdd !important; */
-    color: #1b5e20 !important;
-    font-weight: bold;
-}
-.category-orange {
-    /* background-color: #fff4e0 !important; */
-    color: #e65100 !important;
-    font-weight: bold;
-}
-.category-white {
-    /* background-color: #ffffff !important; */
-    color: #333 !important;
-    font-weight: bold;
-    border: 1px solid #ccc;
-}
-
-
 .nav-btn:hover {
     background: linear-gradient(135deg, #149174 70%, #16a085 100%);
     box-shadow: 0 4px 16px rgba(22,160,133,0.20);
@@ -277,4 +210,62 @@ body {
     transform: translateY(-2px) scale(1.04);
 }
 
+/* Styles for the click-to-edit input field */
+.editable-cell {
+    position: relative; 
+    cursor: pointer;
+}
 
+.edit-in-place {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box; 
+    border: 2px solid #3b82f6;
+    outline: none;
+    font-family: inherit;
+    font-size: inherit;
+    color: #222; /* Black text for readability on white background */
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 15px 25px; /* Match td padding */
+    background-color: #ffffff;
+    z-index: 10;
+}
+
+/* STYLES FOR GOOGLE FORM MODAL */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    position: relative;
+    width: 90%;
+    max-width: 640px;
+    height: 80vh;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.close-button {
+    position: absolute;
+    top: 5px;
+    right: 15px;
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #555;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
