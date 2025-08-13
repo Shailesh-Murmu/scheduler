@@ -1,5 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   // --- FORM SUBMISSION FOR APPROVAL REGISTRATION ---
+  // This part requires no changes, as it serializes the entire form.
+  // The new email fields will be included automatically.
   document.querySelector("form").addEventListener("submit", async (e) => {
     e.preventDefault();
 
@@ -7,7 +9,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const formData = new FormData(form);
     const submitBtn = form.querySelector(".sub");
     const resultDiv = document.getElementById("formResult");
-    
 
     // Convert FormData to JSON
     const jsonData = {};
@@ -20,28 +21,23 @@ document.addEventListener("DOMContentLoaded", () => {
     submitBtn.textContent = "Submitting...";
 
     try {
-      const formData = new FormData(form);
       const response = await fetch("/submit", {
         method: "POST",
         headers: {
-      'Content-Type': 'application/json' // Set content type to JSON
-    },
-        body: JSON.stringify(jsonData) // Send as JSON string
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(jsonData)
       });
 
       const result = await response.text();
 
       if (response.ok) {
-        // Show success message
         resultDiv.style.display = "block";
         resultDiv.style.background = "#f0fff4";
         resultDiv.style.color = "green";
-        resultDiv.innerHTML = "✅ Approval registered successfully!";
-
-        // Reset form
+        resultDiv.innerHTML = `✅ ${result}`;
         form.reset();
       } else {
-        // Show error
         resultDiv.style.display = "block";
         resultDiv.style.background = "#fff0f0";
         resultDiv.style.color = "red";
@@ -53,18 +49,15 @@ document.addEventListener("DOMContentLoaded", () => {
       resultDiv.style.color = "red";
       resultDiv.textContent = `❌ Network error: ${error.message}`;
     } finally {
-      // Reset button
       submitBtn.disabled = false;
       submitBtn.textContent = "Register Approval";
-
-      // Auto-hide message after 5 seconds
       setTimeout(() => {
         resultDiv.style.display = "none";
       }, 5000);
     }
   });
 
-  // --- EXCEL UPLOAD LOGIC ---
+  // --- EXCEL UPLOAD LOGIC (MODIFIED) ---
   let excelFileData = null;
 
   document.getElementById("excelFile").addEventListener("change", function (e) {
@@ -90,12 +83,22 @@ document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("uploadExcelBtn")
     .addEventListener("click", async function () {
-      const notificationEmails =
-        document.getElementById("notificationEmail").value;
-      const emailArray = notificationEmails
-        .split(",")
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0);
+      const resultDiv = document.getElementById("dueDateResult");
+    
+      // Get all 5 emails from the new input fields
+      const emailArray = [
+          document.getElementById("excelPerformerEmail").value.trim(),
+          document.getElementById("excelUnitHeadEmail").value.trim(),
+          document.getElementById("excelUnitChiefEmail").value.trim(),
+          document.getElementById("excelHeadEnvironmentEmail").value.trim(),
+          document.getElementById("excelComplianceEmail").value.trim()
+      ];
+
+      // Validate that all fields are filled
+      if(emailArray.some(email => email === '')) {
+          resultDiv.innerText = "Please fill in all five email fields.";
+          return;
+      }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       const invalidEmails = emailArray.filter(
@@ -103,49 +106,50 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
       if (invalidEmails.length > 0) {
-        document.getElementById(
-          "dueDateResult"
-        ).innerText = `Invalid emails: ${invalidEmails.join(", ")}`;
+        resultDiv.innerText = `Invalid emails: ${invalidEmails.join(", ")}`;
         return;
       }
 
       if (!excelFileData) {
-        document.getElementById("dueDateResult").innerText =
-          "Please select an Excel file first.";
+        resultDiv.innerText = "Please select an Excel file first.";
         return;
       }
 
-      const dataWithEmails = excelFileData.map((record) => ({
-        ...record,
-        emails: emailArray,
-      }));
+      // The backend now expects a top-level `emails` property alongside `data`
+      const payload = {
+          data: excelFileData,
+          emails: emailArray
+      };
 
       try {
         const response = await fetch("/api/upload-excel", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ data: dataWithEmails }),
+          body: JSON.stringify(payload), // Send the new payload structure
         });
 
         const result = await response.json();
 
         if (result.success) {
-          document.getElementById("dueDateResult").innerText =
-            "✅ Excel file uploaded successfully!";
+          resultDiv.innerText = "✅ Excel file uploaded successfully!";
           excelFileData = null; // Reset file data
           document.getElementById("excelFile").value = ""; // Clear file input
+          // Optionally clear email fields
+          document.getElementById("excelPerformerEmail").value = "";
+          document.getElementById("excelUnitHeadEmail").value = "";
+          document.getElementById("excelUnitChiefEmail").value = "";
+          document.getElementById("excelHeadEnvironmentEmail").value = "";
+          document.getElementById("excelComplianceEmail").value = "";
         } else {
-          document.getElementById("dueDateResult").innerText =
-            "Upload failed: " + (result.message || "Unknown error");
+          resultDiv.innerText = "Upload failed: " + (result.message || "Unknown error");
         }
       } catch (error) {
-        document.getElementById("dueDateResult").innerText =
-          "Error: " + error.message;
+        resultDiv.innerText = "Error: " + error.message;
       }
     });
 });
 
-// Navigation functions (keep outside DOMContentLoaded if used globally)
+// Navigation functions
 function goHome() {
   window.location.href = "/";
 }
